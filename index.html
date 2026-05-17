@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f4f7f6; font-size: 14px; padding-bottom: 120px; }
+    .container { max-width: 1000px; background: white; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h4 { color: #0d6efd; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-top: 25px; }
+
+    /* 新規追加・修正CSS */
+    .guest-row { background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:8px 10px; margin-bottom:8px; position:relative; transition: all 0.2s; }
+    .guest-row.allergy-alert { border-color:#f5c6cb; background:#fff5f5; }
+    .guest-no { font-weight:700; color:#0d6efd; font-size:14px; min-width:28px; display:inline-block; }
+    .room-select { min-width:160px; }
+    .room-summary-card { background:#e7f1ff; border:1px solid #b6d4fe; border-radius:8px; padding:12px 16px; margin-top:16px; }
+    .room-summary-card .room-group { margin-bottom:8px; border-bottom: 1px dashed #b6d4fe; padding-bottom: 8px; }
+    .room-summary-card .room-group:last-child { border-bottom: none; }
+    .room-summary-card .room-title { font-weight:700; color:#0d6efd; font-size:13px; display: block; margin-bottom: 2px; }
+    .room-summary-card .room-person { font-size:12px; color:#495057; padding-left:12px; }
+
+    .cal-wrap { max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; }
+    #calTable { font-size: 11px; min-width: 600px; text-align: center; }
+    #calTable thead th { background: #4472c4; color: white; position: sticky; top: 0; }
+    .cal-sun { background: #ffdde0 !important; }
+    .cal-sat { background: #ddeeff !important; }
+    .cal-occ { background: #ffcccc !important; color: #cc0000; font-weight: bold; }
+    .cal-pend { background: #fff3cd !important; color: #b36a00; }
+
+    .time-block { border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 14px; background: #fafafa; margin-bottom: 8px; }
+    .time-block-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #495057; }
+    .time-block-options { display: flex; gap: 12px; flex-wrap: wrap; }
+    .time-block-options label { display: flex; align-items: center; gap: 6px; background: #fff; border: 2px solid #dee2e6; border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; margin: 0; }
+    .time-block-options label:hover { border-color: #0d6efd; background: #f0f7ff; }
+
+    .alert-notes { background: #fffde7; border: 2px solid #ffc107; border-radius: 8px; padding: 12px 16px; font-size: 12px; line-height: 1.8; }
+    .header-notice { background: #e7f1ff; border: 1px solid #b6d4fe; border-radius: 6px; padding: 8px 14px; font-size: 14px; margin-bottom: 15px; color: #084298; }
+    .complete-wrap { padding: 30px 20px; }
+    .booking-id { font-size: 1.6rem; font-weight: 700; color: #0d6efd; letter-spacing: 2px; }
+
+    .price-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fffdf5; border-top: 3px solid #0d6efd; padding: 8px 12px; z-index: 1000; box-shadow: 0 -2px 8px rgba(0,0,0,0.15); font-size: 14px; }
+    .price-bar .pb-row { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 1000px; margin: 0 auto; }
+    .price-bar .pb-cell { text-align: center; padding: 2px 8px; }
+    .price-bar .pb-label { font-size: 11px; color: #6c757d; display: block; }
+    .price-bar .pb-value { font-size: 16px; font-weight: 600; color: #212529; }
+    .price-bar .pb-total { font-size: 20px; color: #0d6efd; }
+
+    @media print { .price-bar,.btn,.cal-wrap { display:none!important } body{padding-bottom:0;background:#fff} .container{box-shadow:none;margin:0;border-radius:0} }
+
+    /* 閲覧モード */
+    body.readonly-mode { background-color: #e9ecef; }
+    body.readonly-mode .container { background: #f8f9fa; }
+    body.readonly-mode .time-block-options label { cursor: default; pointer-events: none; }
+    body.readonly-mode .time-block-options label:hover { border-color: #dee2e6; background: #fff; }
+    /* 改修1: 閲覧モード時の選択済みチェックイン時間強調 */
+    body.readonly-mode .time-block-options label.time-selected { border-color: #0d6efd !important; background-color: #e7f3ff; font-weight: 700; }
+    /* 改修3: 定員超過インライン警告 */
+    .capacity-warn { display: block; font-size: 11px; color: #856404; margin-top: 3px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2 class="text-center mb-1" id="pageTitle">ニッポー白浜荘 利用申請</h2>
+  <div class="header-notice text-center">
+    ※原則<strong>7日前</strong>までに提出してください。※宿泊料及び食事料金は、現地で管理人にお支払いください。　《 宿泊料 》 大人（中学生以上）1,000円／小人（小学生）500円
+  </div>
+
+  <div id="completeView" style="display:none" class="complete-wrap">
+    <div class="text-center mb-4"><i class="bi bi-check-circle-fill text-success" style="font-size:3.5rem"></i><h3 class="mt-3 fw-bold">申請を受け付けました</h3><p class="text-muted">確認メールをお送りしました。</p></div>
+    <div class="card mb-4 border-primary"><div class="card-header bg-primary text-white fw-bold">受付番号</div><div class="card-body text-center py-3"><span class="booking-id" id="cBookingId">—</span></div></div>
+    <table class="table table-sm"><tbody><tr><td>申込者</td><td id="cName">—</td></tr><tr><td>チェックイン</td><td id="cCheckin">—</td></tr><tr><td>チェックアウト</td><td id="cCheckout">—</td></tr><tr><td>部屋割り</td><td id="cRooms">—</td></tr><tr><td>宿泊料</td><td id="cStayFee">—</td></tr><tr><td>食事代</td><td id="cMealFee">—</td></tr><tr><td class="fw-bold">合計</td><td class="fw-bold text-primary" id="cTotal">—</td></tr></tbody></table>
+    <div class="d-flex gap-2 justify-content-center mt-3"><button class="btn btn-outline-secondary" onclick="window.print()">印刷</button><button class="btn btn-primary" onclick="newApplication()">新しい申込</button></div>
+  </div>
+
+  <form id="reserveForm" onsubmit="return false;">
+    <h4><i class="bi bi-calendar3"></i> 空き状況</h4>
+    <div class="d-flex align-items-center mb-2 gap-2 flex-wrap">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeMonth(-1)">◀ 前月</button>
+      <span id="calTitle" class="fw-bold fs-6 mx-1"></span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeMonth(1)">翌月 ▶</button>
+    </div>
+    <div class="cal-wrap mb-2"><div id="calContainer">読み込み中...</div></div>
+    <div class="mb-3 d-flex flex-wrap gap-3">
+      <small><span class="badge" style="background:#ffcccc;color:#cc0000">×</span> 予約済</small>
+      <small><span class="badge" style="background:#fff3cd;color:#b36a00">△</span> 申請中</small>
+      <small><span class="badge border" style="background:#e8f5e9">　</span> 空き</small>
+    </div>
+
+    <h4>1. 基本情報</h4>
+    <div class="row g-3">
+      <div class="col-md-3"><label>代表者氏名 <span class="text-danger">*</span></label><input type="text" id="name" class="form-control" required></div>
+      <div class="col-md-3"><label>所属事業部 <span class="text-danger">*</span></label><input type="text" id="dept" class="form-control" required></div>
+      <div class="col-md-3"><label>電話 <span class="text-danger">*</span></label><input type="tel" id="phone" class="form-control" required></div>
+      <div class="col-md-3"><label>メール <span class="text-danger">*</span></label><input type="email" id="email" class="form-control" required></div>
+      <div class="col-md-6"><label>チェックイン <span class="text-danger">*</span></label><input type="date" id="checkin" class="form-control" required onchange="checkRooms()"></div>
+      <div class="col-md-6"><label>チェックアウト <span class="text-danger">*</span></label><input type="date" id="checkout" class="form-control" required onchange="checkRooms()"></div>
+
+      <div class="col-md-6">
+        <label class="form-label">チェックイン予定時間 <span class="text-danger">*</span></label>
+        <div class="time-block"><div class="time-block-options">
+          <label><input type="radio" name="checkinTime" value="8:30～9:30" required> 8:30～9:30</label>
+          <label><input type="radio" name="checkinTime" value="13:00～14:00"> 13:00～14:00</label>
+          <label><input type="radio" name="checkinTime" value="16:30～17:30"> 16:30～17:30</label>
+        </div></div>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">チェックアウト予定時刻 <span class="text-danger">*</span></label>
+        <select id="checkoutTime" class="form-select" required>
+          <option value="">選択してください</option>
+          <option value="7:00">7:00</option><option value="8:00">8:00</option><option value="9:00">9:00</option>
+          <option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option>
+          <option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option>
+          <option value="16:00">16:00</option><option value="17:00">17:00</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="alert-notes mt-4">
+      <strong><i class="bi bi-exclamation-triangle-fill"></i> 注意事項</strong><br>
+      ※舟盛は1皿<strong>2,000円以上</strong>から承ります。<br>※<strong>BBQ禁止、ペット同伴禁止。</strong><br>※花火は白浜荘敷地内にて<strong>21時まで</strong>可能です。
+    </div>
+
+    <h4>2. 宿泊者名簿と部屋割り</h4>
+
+    <div id="rosterArea" class="mb-2"></div>
+    <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="addPerson()"><i class="bi bi-person-plus"></i> 宿泊者を追加</button>
+
+    <div class="room-summary-card" id="roomSummary">
+      <div class="fw-bold mb-2 small"><i class="bi bi-house-door"></i> 部屋割りまとめ（自動生成）</div>
+      <div id="summaryBody"></div>
+    </div>
+
+    <h4>3. お食事</h4>
+    <div class="time-block mb-3">
+      <div class="time-block-title"><i class="bi bi-clock"></i> 食事来店予定時刻</div>
+      <div class="row g-2">
+        <div class="col-md-6"><div class="time-block"><div class="time-block-title">1日目 夕食</div><div class="time-block-options">
+          <label><input type="radio" name="mealTime1" value="18:00"> 18:00</label>
+          <label><input type="radio" name="mealTime1" value="18:30"> 18:30</label>
+          <label><input type="radio" name="mealTime1" value="19:00"> 19:00</label>
+        </div></div></div>
+        <div class="col-md-6"><div class="time-block"><div class="time-block-title">2日目 朝食</div><div class="time-block-options">
+          <label><input type="radio" name="mealTime2" value="7:00"> 7:00</label>
+          <label><input type="radio" name="mealTime2" value="7:30"> 7:30</label>
+          <label><input type="radio" name="mealTime2" value="8:00"> 8:00</label>
+        </div></div></div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm text-center align-middle" id="mealTbl">
+        <thead class="table-light"><tr><th style="width:14%">日程</th><th style="width:12%">区分</th><th>メニュー</th><th style="width:90px">数量</th><th style="width:90px">鶏鍋</th><th style="width:90px">鯛しゃぶ</th></tr></thead>
+        <tbody id="mealBody"></tbody>
+      </table>
+    </div>
+
+    <div class="mt-3"><label>備考（アレルギーのある方は、何アレルギーで、どのお食事を選択されているか、ご記入ください）</label><textarea id="memo" class="form-control" rows="2"></textarea></div>
+
+    <div class="alert alert-info mt-4"><div class="row text-center"><div class="col-4">宿泊料 ¥<span id="formStay">0</span></div><div class="col-4">食事代 ¥<span id="formMeal">0</span></div><div class="col-4 fw-bold">合計 ¥<span id="formTotal">0</span></div></div></div>
+    <div class="text-center mt-4 mb-3">
+      <button type="button" class="btn btn-primary btn-lg px-5" id="subBtn" onclick="submitForm()"><i class="bi bi-send"></i> 申請を送信する</button>
+    </div>
+  </form>
+</div>
+
+<div class="price-bar"><div class="pb-row">
+  <div class="pb-cell"><span class="pb-label">泊数</span><span class="pb-value"><span id="pbNights">0</span>泊</span></div>
+  <div class="pb-cell"><span class="pb-label">人数(大/小/未満)</span><span class="pb-value"><span id="pbAdults">0</span>/<span id="pbChildren">0</span>/<span id="pbInfants">0</span></span></div>
+  <div class="pb-cell"><span class="pb-label">部屋数</span><span class="pb-value" id="pbRooms">0部屋</span></div>
+  <div class="pb-cell"><span class="pb-label">アレルギー</span><span class="pb-value" id="pbAllergy">なし</span></div>
+  <div class="pb-cell"><span class="pb-label">宿泊料</span><span class="pb-value">¥<span id="pbStay">0</span></span></div>
+  <div class="pb-cell"><span class="pb-label">食事代</span><span class="pb-value">¥<span id="pbMeal">0</span></span></div>
+  <div class="pb-cell"><span class="pb-label">合計</span><span class="pb-value pb-total">¥<span id="pbTotal">0</span></span></div>
+</div></div>
+
+<script>
+// グローバル定数・変数
+var calYear, calMonth;
+var PRICES = { adult: 1000, child: 500, infant: 0 };
+var DINNER = ['A(1500)','B(2500)','C(3500)','洋食(1800)','大皿洋食(1800)','特(要相談)','お子様用(1000)','舟盛(要相談)','鯛茶漬け(800)','ハンバーガープレート(800)'];
+var BREAKFAST = ['和食(650)','洋食(650)'];
+
+var ROOM_LABEL = {
+  '202':'202 かいどう','203':'203 はまぎく','205':'205 ききょう','206':'206 なでしこ','207':'207 あしび',
+  '301':'301 しらなみ','302':'302 なぎさ','303':'303 はまかぜ','305':'305 いそなみ','306':'306 くろしお'
+};
+var ROOM_NAME = {
+  '202':'かいどう','203':'はまぎく','205':'ききょう','206':'なでしこ','207':'あしび',
+  '301':'しらなみ','302':'なぎさ','303':'はまかぜ','305':'いそなみ','306':'くろしお'
+};
+var ROOM_CAPACITY = {
+  '202':4, '203':2, '205':2, '206':2, '207':2,
+  '301':2, '302':2, '303':2, '305':2, '306':2
+};
+
+var personCount = 0;
+var _occupiedRooms = [], _tentativeRooms = [];
+
+// 初期化
+function initCalendar() { var n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth() + 1; loadCalendar(); }
+function changeMonth(d) { calMonth += d; if (calMonth > 12) { calMonth = 1; calYear++; } if (calMonth < 1) { calMonth = 12; calYear--; } loadCalendar(); }
+function loadCalendar() { document.getElementById('calTitle').textContent = calYear + '年' + calMonth + '月'; google.script.run.withSuccessHandler(renderCalendar).getAvailabilityData(calYear, calMonth); }
+
+function renderCalendar(data) {
+  if (data.error) { document.getElementById('calContainer').innerHTML = '<div class="text-danger">' + data.error + '</div>'; return; }
+  var h = '<table class="table table-bordered table-sm" id="calTable"><thead><tr><th>日付</th>';
+  data.rooms.forEach(function(r) { h += '<th>' + r + '</th>'; });
+  h += '</tr></thead><tbody>';
+  data.days.forEach(function(d) {
+    var cls = d.dow === 0 ? 'cal-sun' : d.dow === 6 ? 'cal-sat' : '';
+    h += '<tr class="' + cls + '"><td>' + d.day + '</td>';
+    data.rooms.forEach(function(r) {
+      var st = d.rooms[r];
+      h += st === 'occupied' ? '<td class="cal-occ">×</td>' : st === 'pending' ? '<td class="cal-pend">△</td>' : '<td></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('calContainer').innerHTML = h;
+}
+
+// 宿泊者追加・削除ロジック
+function makeRoomOptions(selectedVal) {
+  function opt(val, label, cap) {
+    var isOcc = _occupiedRooms.indexOf(val) !== -1;
+    var isTent = _tentativeRooms.indexOf(val) !== -1;
+    var dispLabel = val + ' ' + label + '（' + cap + '名）' + (isOcc ? '（予約済）' : isTent ? ' ⚠仮押さえ' : '');
+    return '<option value="' + val + '"' + (selectedVal === val ? ' selected' : '') + (isOcc ? ' disabled' : '') + '>' + dispLabel + '</option>';
+  }
+  return '<option value="">部屋を選択</option>' +
+    '<optgroup label="── 2階 ──">' +
+    opt('202','かいどう','4') + opt('203','はまぎく','2') + opt('205','ききょう','2') + opt('206','なでしこ','2') + opt('207','あしび','2') +
+    '</optgroup><optgroup label="── 3階 ──">' +
+    opt('301','しらなみ','2') + opt('302','なぎさ','2') + opt('303','はまかぜ','2') + opt('305','いそなみ','2') + opt('306','くろしお','2') +
+    '</optgroup>';
+}
+
+function addPerson() {
+  personCount++;
+  var uid = personCount;
+  var html =
+    '<div class="guest-row" id="person-' + uid + '">' +
+    '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+    '<span class="guest-no">' + uid + '.</span>' +
+    '<div><input type="text" class="form-control form-control-sm p-name" placeholder="氏名" style="min-width:130px" oninput="updateSummary()"></div>' +
+    '<div><input type="number" class="form-control form-control-sm p-age" placeholder="年齢" min="0" max="120" style="width:60px"></div>' +
+    '<div><select class="form-select form-select-sm p-kbn" style="min-width:100px" onchange="calcLive()"><option value="">選択してください</option><option>大人</option><option>小人</option><option>小人未満</option></select></div>' +
+    '<div><select class="form-select form-select-sm p-sex" style="width:70px"><option>男</option><option>女</option></select></div>' +
+    '<div><select class="form-select form-select-sm p-rel" style="min-width:90px"><option>社員</option><option>家族</option><option>友人</option><option>取引先</option></select></div>' +
+    '<div class="d-flex align-items-center gap-2" style="min-width:110px">' +
+    '<div class="form-check form-check-inline mb-0"><input class="form-check-input p-allergy" type="radio" name="al_' + uid + '" value="なし" id="al_' + uid + '_n" checked onchange="onAllergyChange(this)"><label class="form-check-label small" for="al_' + uid + '_n">アレルギーなし</label></div>' +
+    '<div class="form-check form-check-inline mb-0"><input class="form-check-input p-allergy" type="radio" name="al_' + uid + '" value="あり" id="al_' + uid + '_y" onchange="onAllergyChange(this)"><label class="form-check-label small text-danger" for="al_' + uid + '_y">アレルギーあり</label></div>' +
+    '</div>' +
+    '<div><select class="form-select form-select-sm p-room room-select" onchange="onRoomChange(this)">' + makeRoomOptions('') + '</select></div>' +
+    '<button class="btn btn-sm btn-outline-danger py-0 px-1 ms-auto" onclick="removePerson(this)"><i class="bi bi-x"></i></button>' +
+    '</div></div>';
+  document.getElementById('rosterArea').insertAdjacentHTML('beforeend', html);
+  updateSummary();
+  calcLive();
+}
+
+function removePerson(btn) {
+  btn.closest('.guest-row').remove();
+  renumberPersons();
+  updateSummary();
+  calcLive();
+}
+
+function renumberPersons() {
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(row, i) {
+    var no = row.querySelector('.guest-no');
+    if (no) no.textContent = (i+1) + '.';
+  });
+}
+
+function onAllergyChange(radio) {
+  var row = radio.closest('.guest-row');
+  if (radio.value === 'あり') row.classList.add('allergy-alert');
+  else row.classList.remove('allergy-alert');
+  updateSummary();
+  calcLive();
+}
+
+function onRoomChange(sel) {
+  // 全警告を一旦削除してから再集計
+  document.querySelectorAll('.capacity-warn').forEach(function(w) { w.remove(); });
+
+  var roomCount = {};
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(row) {
+    var rv = (row.querySelector('.p-room') || {}).value;
+    if (rv) roomCount[rv] = (roomCount[rv] || 0) + 1;
+  });
+
+  // 部屋ごとに1つだけ警告を挿入（最初にその部屋を選んでいるセレクトの下）
+  var warned = {};
+  document.querySelectorAll('#rosterArea .guest-row .p-room').forEach(function(s) {
+    var rv = s.value;
+    if (!rv || warned[rv]) return;
+    var cap = ROOM_CAPACITY[rv] || 0;
+    if (cap > 0 && (roomCount[rv] || 0) > cap) {
+      var w = document.createElement('span');
+      w.className = 'capacity-warn';
+      w.textContent = ROOM_LABEL[rv] + ' 定員（' + cap + '名）超過 ※申請は可能です';
+      s.parentNode.insertBefore(w, s.nextSibling);
+      warned[rv] = true;
+    }
+  });
+
+  updateSummary();
+}
+
+function updateSummary() {
+  var rooms = {};
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(row, i) {
+    var name = (row.querySelector('.p-name')||{}).value || ''; name = name.trim() || '（氏名未入力）';
+    var roomVal = (row.querySelector('.p-room')||{}).value || '';
+    var allergy = ((row.querySelector('.p-allergy:checked')||{}).value) || 'なし';
+    var label = (i+1) + '. ' + name + (allergy === 'あり' ? ' <span class="text-danger">⚠アレルギー</span>' : '');
+    if (!roomVal) roomVal = '__none__';
+    if (!rooms[roomVal]) rooms[roomVal] = [];
+    rooms[roomVal].push(label);
+  });
+
+  var html = '';
+  Object.keys(rooms).forEach(function(roomNo) {
+    if (roomNo === '__none__') return;
+    html += '<div class="room-group"><span class="room-title"><i class="bi bi-door-open"></i> ' + (ROOM_LABEL[roomNo] || roomNo) + '</span>' +
+      rooms[roomNo].map(function(p){ return '<div class="room-person">' + p + '</div>'; }).join('') + '</div>';
+  });
+
+  if (rooms['__none__'] && rooms['__none__'].length > 0) {
+    html += '<div class="room-group"><span class="room-title text-muted"><i class="bi bi-question-circle"></i> 部屋未選択</span>' +
+      rooms['__none__'].map(function(p){ return '<div class="room-person text-muted">' + p + '</div>'; }).join('') + '</div>';
+  }
+
+  if (!html) html = '<span class="text-muted small">宿泊者を追加すると自動集計されます</span>';
+  document.getElementById('summaryBody').innerHTML = html;
+
+  var roomSet = Object.keys(rooms).filter(function(k){ return k !== '__none__'; });
+  document.getElementById('pbRooms').textContent = roomSet.length + '部屋';
+
+  var allergyCount = document.querySelectorAll('#rosterArea .guest-row.allergy-alert').length;
+  var pbAl = document.getElementById('pbAllergy');
+  if (pbAl) {
+    pbAl.textContent = allergyCount > 0 ? allergyCount + '名あり' : 'なし';
+    pbAl.style.color = allergyCount > 0 ? '#dc3545' : '#212529';
+  }
+}
+
+// 部屋空き確認（チェックイン・アウト変更時）
+function checkRooms() {
+  var ci = document.getElementById('checkin').value, co = document.getElementById('checkout').value;
+  if (!ci || !co) return;
+  google.script.run.withSuccessHandler(function(res) {
+    _occupiedRooms = res.occupiedRooms || [];
+    _tentativeRooms = res.tentativeRooms || [];
+
+    // 全てのセレクトボックスを再描画
+    document.querySelectorAll('.p-room').forEach(function(sel) {
+      var currentVal = sel.value;
+      sel.innerHTML = makeRoomOptions(currentVal);
+    });
+    updateSummary();
+  }).getOccupiedRooms(ci, co);
+}
+
+function stepQty(btn, delta) {
+  var wrap = btn.parentNode;
+  var inp = wrap.querySelector('input');
+  var v = parseInt(inp.value, 10) || 0;
+  v += delta;
+  if (v < 0) v = 0;
+  inp.value = v;
+  calcLive();
+}
+
+// 料金計算
+function calcLive() {
+  var ci = document.getElementById('checkin').value, co = document.getElementById('checkout').value;
+  var nights = 0;
+  if (ci && co) {
+    var d1 = new Date(ci), d2 = new Date(co);
+    if (!isNaN(d1) && !isNaN(d2) && d2 > d1) nights = Math.round((d2 - d1) / 86400000);
+  }
+
+  var adults = 0, children = 0, infants = 0;
+  document.querySelectorAll('.guest-row').forEach(function(c) {
+    var nm = c.querySelector('.p-name').value.trim(); if (!nm) return;
+    var k = c.querySelector('.p-kbn').value;
+    if (k === '大人') adults++; else if (k === '小人') children++; else if (k === '小人未満') infants++;
+  });
+
+  var stayFee = (adults * PRICES.adult + children * PRICES.child + infants * PRICES.infant) * nights;
+  var mealTotal = 0;
+  document.querySelectorAll('.m-qty').forEach(function(q) {
+    var qty = parseInt(q.value) || 0;
+    if (qty > 0) {
+      var p = (q.dataset.price || 0);
+      mealTotal += p * qty;
+    }
+  });
+
+  document.getElementById('pbNights').textContent = nights;
+  document.getElementById('pbAdults').textContent = adults;
+  document.getElementById('pbChildren').textContent = children;
+  document.getElementById('pbInfants').textContent = infants;
+  document.getElementById('pbStay').textContent = stayFee.toLocaleString();
+  document.getElementById('pbMeal').textContent = mealTotal.toLocaleString();
+  document.getElementById('pbTotal').textContent = (stayFee + mealTotal).toLocaleString();
+
+  document.getElementById('formStay').textContent = stayFee.toLocaleString();
+  document.getElementById('formMeal').textContent = mealTotal.toLocaleString();
+  document.getElementById('formTotal').textContent = (stayFee + mealTotal).toLocaleString();
+}
+
+// 食事テーブル構築
+function buildMeals() {
+  var tb = document.getElementById('mealBody'); tb.innerHTML = '';
+  function hdr(day, meal) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="6" style="background:#f0f0f0; font-weight:700; text-align:left; padding:6px"><i class="bi ' + (meal === '夕食' ? 'bi-moon-stars' : 'bi-sunrise') + '"></i> ' + day + ' ' + meal + '</td>';
+    tb.appendChild(tr);
+  }
+  function row(day, kbn, item) {
+    var p = item.match(/\((\d+)\)/);
+    var pr = p ? parseInt(p[1], 10) : 0;
+    var isBC = item.indexOf('B(') === 0 || item.indexOf('C(') === 0;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + day + '</td>' +
+      '<td><span class="badge ' + (kbn === '夕食' ? 'bg-danger' : 'bg-success') + '">' + kbn + '</span></td>' +
+      '<td class="text-start">' + item + '</td>' +
+      '<td style="min-width:110px">' +
+        '<div class="input-group input-group-sm">' +
+          '<button type="button" class="btn btn-outline-secondary" onclick="stepQty(this,-1)">−</button>' +
+          '<input type="number" class="form-control text-center m-qty" data-price="' + pr +
+            '" data-day="' + day + '" data-kbn="' + kbn + '" data-menu="' + item +
+            '" min="0" value="0" step="1" inputmode="numeric" onchange="calcLive()">' +
+          '<button type="button" class="btn btn-outline-secondary" onclick="stepQty(this,1)">＋</button>' +
+        '</div>' +
+      '</td>' +
+      '<td style="min-width:90px">' + (isBC ? '<input type="number" class="form-control n-tori" min="0" value="0" step="1" inputmode="numeric">' : '') + '</td>' +
+      '<td style="min-width:90px">' + (isBC ? '<input type="number" class="form-control n-tai" min="0" value="0" step="1" inputmode="numeric">' : '') + '</td>';
+    tb.appendChild(tr);
+  }
+  hdr('1日目','夕食'); DINNER.forEach(function(i){ row('1日目','夕食',i); });
+  hdr('2日目','朝食'); BREAKFAST.forEach(function(i){ row('2日目','朝食',i); });
+  hdr('2日目','夕食'); DINNER.forEach(function(i){ row('2日目','夕食',i); });
+  hdr('3日目','朝食'); BREAKFAST.forEach(function(i){ row('3日目','朝食',i, false); });
+}
+
+// GASからメニューマスター取得（失敗時はフォールバック）
+function loadMealMenu(onDone) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res) {
+        if (res.dinner && res.dinner.length) DINNER = res.dinner;
+        if (res.breakfast && res.breakfast.length) BREAKFAST = res.breakfast;
+      }
+      buildMeals();
+      if (onDone) onDone();
+    })
+    .withFailureHandler(function(err) {
+      console.error(err);
+      buildMeals();
+      if (onDone) onDone();
+    })
+    .getMealMenu();
+}
+
+// 送信処理
+function submitForm() {
+  var data = {
+    name: document.getElementById('name').value,
+    dept: document.getElementById('dept').value,
+    phone: document.getElementById('phone').value,
+    email: document.getElementById('email').value,
+    checkin: document.getElementById('checkin').value,
+    checkout: document.getElementById('checkout').value,
+    checkinTime: document.querySelector('input[name="checkinTime"]:checked') ? document.querySelector('input[name="checkinTime"]:checked').value : '',
+    checkoutTime: document.getElementById('checkoutTime').value,
+    memo: document.getElementById('memo').value
+  };
+
+  if (!data.name || !data.email || !data.checkin || !data.checkout) { alert('必須項目を入力してください'); return; }
+
+  // 年齢必須チェック（布団数調整のため）
+  var missingAge = Array.prototype.slice.call(document.querySelectorAll('#rosterArea .guest-row')).some(function(row) {
+    return row.querySelector('.p-name').value.trim() !== '' && row.querySelector('.p-age').value === '';
+  });
+  if (missingAge) { alert('宿泊者の年齢を入力してください。（0歳の場合は 0 を入力）'); return; }
+
+  // 区分必須チェック（大人・小人・小人未満の選択を強制）
+  var kbnError = false;
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(row) {
+    var nameEl = row.querySelector('.p-name');
+    var kbnEl  = row.querySelector('.p-kbn');
+    var n = nameEl ? nameEl.value.trim() : '';
+    var k = kbnEl  ? kbnEl.value         : '';
+    if (n !== '' && k === '') kbnError = true;
+  });
+  if (kbnError) { alert('宿泊者の区分（大人・小人・小人未満）を選択してください。'); return; }
+
+  // 部屋定員チェック（警告のみ・送信は可能）
+  var roomCount = {};
+  var capacityOverRooms = [];
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(row) {
+    var rv = (row.querySelector('.p-room') || {}).value;
+    if (rv) {
+      roomCount[rv] = (roomCount[rv] || 0) + 1;
+      var cap = ROOM_CAPACITY[rv] || 0;
+      if (cap > 0 && roomCount[rv] > cap && capacityOverRooms.indexOf(rv) === -1) {
+        capacityOverRooms.push(rv);
+      }
+    }
+  });
+  if (capacityOverRooms.length > 0) {
+    var overMsg = capacityOverRooms.map(function(rv) {
+      return ROOM_LABEL[rv] + '（定員' + (ROOM_CAPACITY[rv] || 0) + '名）';
+    }).join('、');
+    if (!confirm('定員超過の部屋があります: ' + overMsg + '\nそのまま申請しますか？')) return;
+  }
+
+  // バグ4対応: アレルギーあり＋備考未記入のチェック
+  var hasAllergy = false;
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(c) {
+    var a = c.querySelector('.p-allergy:checked');
+    if (a && a.value === 'あり') hasAllergy = true;
+  });
+  if (hasAllergy && !data.memo.trim()) {
+    alert('アレルギーありの方がいます。備考欄に詳細を記入してください');
+    return;
+  }
+
+  // Roster & Room Assignments 構築
+  var roster = [];
+  var roomMap = {};
+
+  document.querySelectorAll('#rosterArea .guest-row').forEach(function(c) {
+    var nm = c.querySelector('.p-name').value.trim(); if (!nm) return;
+    var age = c.querySelector('.p-age').value;
+    var kbn = c.querySelector('.p-kbn').value;
+    var sex = c.querySelector('.p-sex').value;
+    var rel = c.querySelector('.p-rel').value;
+    var allergyEl = c.querySelector('.p-allergy:checked');
+    var allergy = allergyEl ? allergyEl.value : 'なし';
+    var roomVal = c.querySelector('.p-room').value;
+
+    var personObj = { name: nm, age: age, kbn: kbn, gender: sex, relation: rel, allergy: allergy };
+    roster.push(personObj);
+
+    if (roomVal) {
+      if (!roomMap[roomVal]) roomMap[roomVal] = [];
+      roomMap[roomVal].push(personObj);
+    }
+  });
+
+  if (roster.length === 0) { alert('宿泊者を1名以上入力してください'); return; }
+
+  var roomAssignments = Object.keys(roomMap).map(function(roomNo) {
+    return { room: roomNo, roomname: ROOM_NAME[roomNo] || '', guests: roomMap[roomNo] };
+  });
+
+  // バグ5対応: 部屋割り未入力時の確認
+  if (roster.length > 0 && roomAssignments.length === 0) {
+    if (!confirm('部屋割りが未入力です。このまま登録しますか？')) return;
+  }
+
+  var meals = [];
+  document.querySelectorAll('.m-qty').forEach(function(q) {
+    var qty = parseInt(q.value, 10) || 0;
+    if (qty > 0) {
+      meals.push(q.dataset.day + ' ' + q.dataset.kbn + ' ' + q.dataset.menu + 'x' + qty);
+      var tr = q.closest('tr');
+      var tori = tr.querySelector('.n-tori') ? (parseInt(tr.querySelector('.n-tori').value, 10) || 0) : 0;
+      var tai = tr.querySelector('.n-tai') ? (parseInt(tr.querySelector('.n-tai').value, 10) || 0) : 0;
+      if (tori > 0) meals.push(q.dataset.day + ' ' + q.dataset.kbn + ' 鶏鍋x' + tori);
+      if (tai > 0) meals.push(q.dataset.day + ' ' + q.dataset.kbn + ' 鯛しゃぶx' + tai);
+    }
+  });
+
+  var subBtn = document.getElementById('subBtn');
+  subBtn.disabled = true;
+  subBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 送信中...';
+
+  google.script.run.withSuccessHandler(function(res) {
+    document.getElementById('reserveForm').style.display = 'none';
+    document.getElementById('completeView').style.display = 'block';
+    document.getElementById('cBookingId').textContent = res.bookingId;
+    document.getElementById('cName').textContent = res.name;
+    document.getElementById('cCheckin').textContent = res.checkin;
+    document.getElementById('cCheckout').textContent = res.checkout;
+    document.getElementById('cRooms').textContent = res.rooms || '未選択あり';
+    document.getElementById('cStayFee').textContent = '¥' + res.stayFee.toLocaleString();
+    document.getElementById('cMealFee').textContent = '¥' + res.mealTotal.toLocaleString();
+    document.getElementById('cTotal').textContent = '¥' + res.grandTotal.toLocaleString();
+    window.scrollTo(0, 0);
+  }).withFailureHandler(function(err) {
+    // バグ3対応: エラーハンドリングの追加
+    console.error(err);
+    alert('エラー: ' + err.message);
+    subBtn.disabled = false;
+    subBtn.innerHTML = '<i class="bi bi-send"></i> 申請を送信する';
+  }).processForm({
+    name: data.name, dept: data.dept, phone: data.phone, email: data.email,
+    checkin: data.checkin, checkout: data.checkout,
+    checkinTime: data.checkinTime, checkoutTime: data.checkoutTime, memo: data.memo,
+    roster: roster,
+    roomAssignments: roomAssignments,
+    rooms: roomAssignments.map(function(a){ return a.room + ' ' + a.roomname + ': ' + a.guests.map(function(g){return g.name;}).join(', '); }).join('\n'),
+    meals: meals.join('\n')
+  });
+}
+
+function newApplication() { location.reload(); }
+
+// URLパラメータ取得
+function getUrlParam(name) {
+  var m = window.location.search.match(new RegExp('[?&]' + name + '=([^&]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// ===== 閲覧モード =====
+function loadMealMenuForView(no) {
+  loadMealMenu(function() {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res) {
+          document.getElementById('reserveForm').innerHTML =
+            '<div class="alert alert-danger mt-4">予約No.' + no + ' が見つかりません。</div>';
+          return;
+        }
+        populateViewMode(res);
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('reserveForm').innerHTML =
+          '<div class="alert alert-danger mt-4">データ取得失敗: ' + err.message + '</div>';
+      })
+      .getReservationByNo(no);
+  });
+}
+
+function populateViewMode(r) {
+  // タイトル変更
+  var titleEl = document.getElementById('pageTitle');
+  if (titleEl) titleEl.textContent = 'No.' + r.no + ' ' + r.name + ' 様 ― 申請内容確認';
+
+  // 基本情報
+  var f = function(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
+  f('name', r.name); f('dept', r.dept); f('phone', r.phone); f('email', r.email);
+  f('checkin', r.checkin); f('checkout', r.checkout); f('memo', r.memo);
+
+  // チェックイン時間（ラジオ）
+  if (r.checkinTime) {
+    var ciR = document.querySelector('input[name="checkinTime"][value="' + r.checkinTime + '"]');
+    if (ciR) ciR.checked = true;
+  }
+  // チェックアウト時刻（セレクト）
+  if (r.checkoutTime) {
+    var coS = document.getElementById('checkoutTime');
+    if (coS) coS.value = r.checkoutTime;
+  }
+
+  // 宿泊者名簿
+  parseAndPopulateRoster(r.rooms, r.roster);
+
+  // 食事
+  parseAndPopulateMeals(r.meals);
+
+  // 料金再計算
+  calcLive();
+
+  // 読み取り専用化
+  setViewReadOnly();
+}
+
+function parseAndPopulateRoster(roomsText, rosterText) {
+  var container = document.getElementById('rosterArea');
+  container.innerHTML = '';
+  personCount = 0;
+
+  var guests = [];
+
+  function parseAttrs(attrsStr) {
+    var result = {};
+    (attrsStr || '').split('・').forEach(function(part) {
+      part = part.trim();
+      if (!part) return;
+      if (/^\d+歳$/.test(part))              result.age      = part.replace('歳','');
+      else if (part==='大人'||part==='小人'||part==='小人未満') result.kbn = part;
+      else if (part==='男'||part==='女')      result.gender   = part;
+      else if (part==='アレルギーあり')        result.allergy  = 'あり';
+      else if (part==='アレルギーなし')        result.allergy  = 'なし';
+      else if (part==='社員'||part==='家族'||part==='友人'||part==='取引先') result.relation = part;
+    });
+    return result;
+  }
+
+  var src = (roomsText && roomsText.trim()) ? roomsText : rosterText;
+  var isRooms = !!(roomsText && roomsText.trim());
+  var currentRoom = '';
+
+  (src || '').split('\n').forEach(function(line) {
+    if (isRooms) {
+      // 部屋ヘッダー: "202 かいどう:" （インデントなし）
+      var rh = line.match(/^(\d+)\s+.+:?\s*$/);
+      if (rh && !/^\s+\d+\./.test(line)) { currentRoom = rh[1]; return; }
+    }
+    // ゲスト行: "  1. 氏名(attrs)" or "1. 氏名(attrs)"
+    var gm = line.match(/^\s*\d+\.\s+(.+?)(?:\((.+?)\))?\s*$/);
+    if (!gm) return;
+    var attrs = parseAttrs(gm[2] || '');
+    guests.push({ name: gm[1].trim(), room: isRooms ? currentRoom : '', kbn: attrs.kbn, age: attrs.age, gender: attrs.gender, relation: attrs.relation, allergy: attrs.allergy });
+  });
+
+  guests.forEach(function(g) {
+    addPerson();
+    var rows = container.querySelectorAll('.guest-row');
+    var row = rows[rows.length - 1];
+    row.querySelector('.p-name').value = g.name || '';
+    if (g.age)      row.querySelector('.p-age').value  = g.age;
+    if (g.kbn)      row.querySelector('.p-kbn').value  = g.kbn;
+    if (g.gender)   row.querySelector('.p-sex').value  = g.gender;
+    if (g.relation) row.querySelector('.p-rel').value  = g.relation;
+    if (g.room)     row.querySelector('.p-room').value = g.room;
+    if (g.allergy) {
+      var alEl = row.querySelector('.p-allergy[value="' + g.allergy + '"]');
+      if (alEl) { alEl.checked = true; if (g.allergy === 'あり') row.classList.add('allergy-alert'); }
+    }
+  });
+
+  updateSummary();
+}
+
+function parseAndPopulateMeals(mealsText) {
+  if (!mealsText) return;
+  var lastQtyInput = null;
+  mealsText.split('\n').forEach(function(line) {
+    line = line.trim();
+    if (!line) return;
+    // 特殊行: "N日目 区分 鶏鍋xQ" or "鯛しゃぶxQ"
+    var toriM = line.match(/^(\d+日目\s+(?:夕食|朝食))\s+鶏鍋x(\d+)$/);
+    var taiM  = line.match(/^(\d+日目\s+(?:夕食|朝食))\s+鯛しゃぶx(\d+)$/);
+    if (toriM && lastQtyInput) {
+      var toriEl = lastQtyInput.closest('tr').querySelector('.n-tori');
+      if (toriEl) toriEl.value = parseInt(toriM[2], 10);
+      return;
+    }
+    if (taiM && lastQtyInput) {
+      var taiEl = lastQtyInput.closest('tr').querySelector('.n-tai');
+      if (taiEl) taiEl.value = parseInt(taiM[2], 10);
+      return;
+    }
+    // 通常行: "N日目 区分 メニューxQ"
+    var m = line.match(/^(\d+日目)\s+(夕食|朝食)\s+(.+?)x(\d+)$/);
+    if (!m) return;
+    var day = m[1], kbn = m[2], menu = m[3], qty = parseInt(m[4], 10);
+    var inp = document.querySelector('.m-qty[data-day="' + day + '"][data-kbn="' + kbn + '"][data-menu="' + menu + '"]');
+    if (inp) { inp.value = qty; lastQtyInput = inp; }
+  });
+  calcLive();
+}
+
+function setViewReadOnly() {
+  // body に readonly-mode クラスを追加（CSS側でグレー化）
+  document.body.classList.add('readonly-mode');
+
+  var form = document.getElementById('reserveForm');
+
+  // 送信ボタン・宿泊者追加ボタンのみ非表示
+  var subBtn = document.getElementById('subBtn');
+  if (subBtn) subBtn.style.display = 'none';
+  var addBtn = document.querySelector('button[onclick="addPerson()"]');
+  if (addBtn) addBtn.style.display = 'none';
+
+  // 確認バナー挿入
+  var banner = document.createElement('div');
+  banner.className = 'alert alert-info mb-3';
+  banner.innerHTML = '<i class="bi bi-eye"></i> <strong>申請内容確認モード</strong>（編集不可）';
+  form.insertBefore(banner, form.firstChild);
+
+  // テキスト系入力 → readonly（Bootstrap の .form-control[readonly] スタイルで自動グレー化）
+  form.querySelectorAll(
+    'input[type="text"], input[type="date"], input[type="number"],' +
+    'input[type="email"], input[type="tel"], textarea'
+  ).forEach(function(el) {
+    el.setAttribute('readonly', '');
+  });
+
+  // ラジオ・セレクト → disabled（readonly が効かないため）
+  form.querySelectorAll('input[type="radio"], select').forEach(function(el) {
+    el.disabled = true;
+  });
+
+  // その他のボタン（±ステップボタン・削除ボタン等）→ disabled
+  // ※ 非表示にしたボタンはスキップ
+  form.querySelectorAll('button').forEach(function(el) {
+    if (el.style.display !== 'none') el.disabled = true;
+  });
+
+  // 改修1: 選択済みチェックイン時間ラベルを強調
+  var checkedCiTime = document.querySelector('input[name="checkinTime"]:checked');
+  if (checkedCiTime) checkedCiTime.closest('label').classList.add('time-selected');
+}
+// ===== /閲覧モード =====
+
+// 実行
+window.addEventListener('DOMContentLoaded', function() {
+  function enterViewMode(viewNo) {
+    // 閲覧モード: カレンダーセクションを非表示
+    var calSection = document.querySelector('h4');  // "空き状況" h4
+    if (calSection) {
+      var calWrap = calSection.nextElementSibling;
+      calSection.style.display = 'none';
+      while (calWrap && !calWrap.matches('h4')) { calWrap.style.display = 'none'; calWrap = calWrap.nextElementSibling; }
+    }
+    loadMealMenuForView(viewNo);
+  }
+  var _lastAutoSyncedName = '';
+
+  function enterNormalMode() {
+    initCalendar();
+    addPerson();
+
+    // 代表者氏名 → 1人目氏名 自動同期（手入力済みは上書きしない）
+    document.getElementById('name').addEventListener('input', function() {
+      var first = document.querySelector('#rosterArea .guest-row .p-name');
+      if (!first) return;
+      var cur = first.value;
+      var rep = this.value;
+      if ((cur === '' || cur === _lastAutoSyncedName) && rep !== '') {
+        first.value = rep;
+        _lastAutoSyncedName = rep;
+        updateSummary();
+      }
+    });
+
+    calcLive();
+    loadMealMenu();
+  }
+
+  // window.location.search で取れる場合（ローカルデバッグ等）は即座に処理
+  var quickNo = getUrlParam('no');
+  if (quickNo) { enterViewMode(quickNo); return; }
+
+  // GAS exec 環境では google.script.url.getLocation でパラメータを取得
+  try {
+    google.script.url.getLocation(function(loc) {
+      var no = loc && loc.parameter && loc.parameter.no;
+      if (no) { enterViewMode(no); } else { enterNormalMode(); }
+    });
+  } catch(e) {
+    enterNormalMode();
+  }
+});
+
+</script>
+</body>
+</html>

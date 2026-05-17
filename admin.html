@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body{background:#f4f7f6;font-size:13px}.wrap{max-width:98vw;margin:0 auto;padding:12px}
+    #loginView{display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .stats-bar{background:#4472c4;color:#fff;padding:8px 16px;border-radius:6px;margin-bottom:12px}
+    .stats-bar .num{font-size:1.4rem;font-weight:700}
+    .tbl-wrap{overflow-x:auto;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+    .adm-tbl th{background:#4472c4;color:#fff;white-space:nowrap;vertical-align:middle;position:sticky;top:0;z-index:5;font-size:12px}
+    .adm-tbl td{vertical-align:middle;white-space:nowrap;font-size:12px}
+    .adm-tbl tbody tr:hover{background:#f0f4ff}
+    select.apv{font-size:11px;padding:1px 2px;border-radius:4px}
+    select.apv.s-未承認{background:#fff3cd;border-color:#ffc107}
+    select.apv.s-承認{background:#d1e7dd;border-color:#198754}
+    select.apv.s-却下{background:#f8d7da;border-color:#dc3545}
+    .status-badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700}
+    .status-approved{background:#d1e7dd;color:#0f5132}
+    .status-pending{background:#fff3cd;color:#856404}
+    .status-rejected{background:#f8d7da;color:#842029}
+    .block-card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);padding:16px}
+    .room-check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 12px}
+    .room-check-grid label{background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:6px 8px;cursor:pointer}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+    .cal-head{text-align:center;font-weight:700;padding:4px;background:#4472c4;color:#fff;border-radius:4px}
+    .cal-head.sun{background:#c0392b}.cal-head.sat{background:#1a6bb5}
+    .cal-cell{background:#fff;border:1px solid #dee2e6;border-radius:4px;min-height:80px;padding:4px}
+    .cal-cell.other-month{background:#f8f9fa}
+    .cal-day{font-size:11px;font-weight:700;margin-bottom:2px}
+    .cal-day.sun{color:#c0392b}.cal-day.sat{color:#1a6bb5}
+    .cal-res{font-size:10px;padding:1px 4px;border-radius:3px;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cal-approved{background:#d1e7dd;color:#0f5132}
+    .cal-pending{background:#fff3cd;color:#856404}
+    .cal-rejected{background:#dee2e6;color:#6c757d}
+    @media print{.no-print,nav,.nav-tabs,select{display:none!important}body{background:#fff}}
+    /* ヘッダー固定 */
+    #stickyHeader{position:sticky;top:0;z-index:100;background:#f4f7f6;padding-bottom:2px}
+    #tab-stay .tbl-wrap{max-height:calc(100vh - 170px);overflow-y:auto}
+    @media(max-width:576px){#tab-stay .tbl-wrap{max-height:60vh}#stickyHeader .nav-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}}
+    /* 宿泊管理：部屋詳細セル */
+    #tab-stay .adm-tbl{min-width:1700px}
+    .room-detail-cell{text-align:left;vertical-align:top !important;min-width:450px;max-width:600px;white-space:normal}
+    #tab-stay .room-detail-cell{width:33vw}
+    .stay-date-cell{white-space:nowrap;line-height:1.35;text-align:center}
+    .room-detail-wrap{margin:0;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;font-family:inherit;font-size:0.85rem;line-height:1.45}
+    .room-detail-cell.has-allergy{background-color:#fff3cd}
+    .room-allergy-line{display:inline-block;background-color:#fff0f0;border-left:4px solid #dc3545;padding-left:4px}
+    .room-allergy-badge{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;background-color:#dc3545;color:#fff;font-size:0.75rem;font-weight:700}
+    /* 食事手配タブ：日付区切り・朝食/夕食色分け */
+    #tab-meal .meal-new-date td{border-top:3px solid #495057 !important}
+    #tab-meal .meal-breakfast td{background-color:#f8fbff}
+    #tab-meal .meal-dinner td{background-color:#fffaf2}
+    #tab-meal .meal-new-date td:first-child{font-weight:700;font-size:1.05rem}
+    /* 食事手配タブ：アレルギー警告 */
+    .meal-allergy-alert{margin-top:6px;padding:4px 6px;background-color:#fff0f0;border-left:3px solid #dc3545;border-radius:4px;display:inline-block;line-height:1.3}
+    .meal-allergy-target{font-size:0.8rem;color:#dc3545;font-weight:bold;margin-top:3px}
+    /* 部屋別ガントチャート */
+    .gantt-wrap{overflow-x:auto;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);margin-top:4px}
+    .gantt-tbl{border-collapse:collapse;font-size:11px;width:100%}
+    .gantt-tbl th,.gantt-tbl td{border:1px solid #dee2e6;padding:3px 5px;vertical-align:top}
+    .gantt-tbl thead th{background:#4472c4;color:#fff;text-align:center;white-space:nowrap;min-width:80px;position:sticky;top:0;z-index:5}
+    .gantt-room-head{min-width:90px !important;background:#343a40 !important;position:sticky;left:0;z-index:10 !important}
+    .gantt-room-label{background:#f8f9fa;font-weight:700;position:sticky;left:0;z-index:2;border-right:2px solid #adb5bd !important;white-space:nowrap;min-width:90px;vertical-align:middle !important}
+    .gantt-entry{border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.3}
+    .gantt-name{font-weight:600;display:block;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+    .gantt-no{display:block;font-size:10px;opacity:.8}
+    .gantt-booked-pending{background:#fff3cd;color:#856404}
+    .gantt-booked-approved{background:#d1e7dd;color:#0f5132}
+    .gantt-booked-rejected{background:#dee2e6;color:#6c757d}
+    .gantt-booked-block{background:#e2d9f3;color:#432874}
+    .gantt-empty{text-align:center;color:#dee2e6;font-size:10px;padding:6px 0 !important;vertical-align:middle !important}
+    .gantt-checkout{font-size:10px;color:#0d6efd;background:#e7f1ff;border:1px dashed #0d6efd;border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.25}
+  </style>
+</head>
+<body>
+<div id="loginView">
+  <div class="card shadow" style="width:320px">
+    <div class="card-header bg-primary text-white text-center fw-bold"><i class="bi bi-shield-lock"></i> 白浜荘 管理者ログイン</div>
+    <div class="card-body">
+      <div class="mb-3"><label class="form-label small">パスワード</label><input type="password" id="passInput" class="form-control" onkeydown="if(event.key==='Enter')login()"></div>
+      <button class="btn btn-primary w-100" onclick="login()" id="loginBtn"><i class="bi bi-box-arrow-in-right"></i> ログイン</button>
+      <div id="loginErr" class="text-danger small mt-2" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div id="adminView" class="wrap" style="display:none">
+  <div id="stickyHeader">
+  <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-building"></i> 白浜荘 予約管理</h5>
+    <div class="d-flex gap-2"><button class="btn btn-sm btn-outline-primary" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i>更新</button><button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i>印刷</button><span id="lastUpdate" class="text-muted small align-self-center"></span></div>
+  </div>
+
+  <ul class="nav nav-tabs mb-0 no-print" id="mainTabs">
+    <li class="nav-item"><button class="nav-link active" onclick="switchTab('stay',this)"><i class="bi bi-table"></i>宿泊管理</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('meal',this)"><i class="bi bi-fork-knife"></i>食事手配</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('cal',this)"><i class="bi bi-calendar3"></i>カレンダー</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('block',this)"><i class="bi bi-calendar-plus"></i>予定押さえ</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('mail',this)"><i class="bi bi-envelope-at"></i>メール管理</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('apply',this)"><i class="bi bi-box-arrow-up-right"></i>申請ページ</button></li>
+  </ul>
+  </div><!-- /#stickyHeader -->
+
+  <div id="tab-stay">
+    <div class="stats-bar d-flex flex-wrap gap-4 align-items-center no-print">
+      <div><select id="yearSel" class="form-select form-select-sm" style="width:auto;display:inline-block" onchange="renderStay()"></select><span>年度</span></div>
+      <div><span class="num" id="stCnt">0</span>件</div>
+      <div>宿泊人数<span class="num" id="stPpl">0</span>名</div>
+      <div>宿泊費合計<span class="num">¥</span><span class="num" id="stFee">0</span></div>
+      <div class="ms-auto"><input type="text" id="stSearch" class="form-control form-control-sm" placeholder="氏名・所属・No" style="width:160px" oninput="renderStay()"></div>
+    </div>
+    <div class="tbl-wrap mt-2">
+      <table class="table table-bordered table-sm mb-0 adm-tbl" id="stayTbl">
+        <thead><tr><th>No</th><th>申請日時</th><th>宿泊日</th><th>代表者</th><th>大人</th><th>小人</th><th>小人以下</th><th>宿泊人数</th><th>宿泊日数</th><th>宿泊費</th><th>部屋</th><th>状態</th><th>小久保</th><th>伊藤</th><th>備考</th><th>詳細</th></tr></thead>
+        <tbody id="stayBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tab-meal" style="display:none">
+    <div class="d-flex gap-2 mb-3 flex-wrap no-print">
+      <div><label class="form-label small mb-0">期間</label><input type="date" id="mealFrom" class="form-control form-control-sm" onchange="renderMeal()"></div>
+      <div><label class="form-label small mb-0">〜</label><input type="date" id="mealTo" class="form-control form-control-sm" onchange="renderMeal()"></div>
+      <div class="d-flex gap-1 align-self-end"><button class="btn btn-sm btn-outline-secondary" onclick="setMealRange(7)">1週間</button><button class="btn btn-sm btn-outline-secondary" onclick="setMealRange(30)">1か月</button><button class="btn btn-sm btn-outline-secondary" onclick="setMealRange(0)">全件</button></div>
+    </div>
+    <div class="tbl-wrap"><table class="table table-bordered table-sm mb-0 adm-tbl" id="mealTbl"><thead><tr><th>日付</th><th>区分</th><th>料理名</th><th>数量</th><th>内訳</th></tr></thead><tbody id="mealBody"></tbody></table></div>
+  </div>
+
+  <div id="tab-cal" style="display:none">
+    <div class="d-flex align-items-center gap-3 mb-3 no-print"><button class="btn btn-sm btn-outline-secondary" onclick="calShift(-1)">◀前月</button><span id="calTitle" class="fw-bold fs-6"></span><button class="btn btn-sm btn-outline-secondary" onclick="calShift(1)">翌月▶</button></div>
+    <div class="cal-grid mb-1"><div class="cal-head sun">日</div><div class="cal-head">月</div><div class="cal-head">火</div><div class="cal-head">水</div><div class="cal-head">木</div><div class="cal-head">金</div><div class="cal-head sat">土</div></div>
+    <div id="calGrid" class="cal-grid"></div>
+    <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-layout-three-columns"></i> 部屋別チャート</h6>
+    <div class="gantt-wrap"><div id="ganttGrid"></div></div>
+  </div>
+
+  <div id="tab-block" style="display:none">
+    <div class="block-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-calendar-plus"></i>管理者予定押さえ</h6>
+      <form id="adminBlockForm" onsubmit="submitAdminBlock(event)">
+        <div class="row g-3">
+          <div class="col-md-3"><label class="form-label small mb-1">区分</label><select id="blockType" class="form-select form-select-sm"><option value="メンテナンス">メンテナンス</option><option value="会社行事">会社行事</option><option value="仮押さえ">仮押さえ</option><option value="来客予定">来客予定</option><option value="その他">その他</option></select></div>
+          <div class="col-md-3"><label class="form-label small mb-1">チェックイン</label><input type="date" id="blockCheckin" class="form-control form-control-sm" required></div>
+          <div class="col-md-3"><label class="form-label small mb-1">チェックアウト</label><input type="date" id="blockCheckout" class="form-control form-control-sm" required></div>
+          <div class="col-md-3"><label class="form-label small mb-1">備考</label><input type="text" id="blockMemo" class="form-control form-control-sm"></div>
+          <div class="col-12"><label class="form-label small mb-1">対象部屋</label>
+            <div class="room-check-grid">
+              <label><input type="checkbox" name="adminRoom" value="202かいどう">202</label><label><input type="checkbox" name="adminRoom" value="203はまぎく">203</label><label><input type="checkbox" name="adminRoom" value="205ききょう">205</label><label><input type="checkbox" name="adminRoom" value="206なでしこ">206</label><label><input type="checkbox" name="adminRoom" value="207あしび">207</label><label><input type="checkbox" name="adminRoom" value="301しらなみ">301</label><label><input type="checkbox" name="adminRoom" value="302なぎさ">302</label><label><input type="checkbox" name="adminRoom" value="303はまかぜ">303</label><label><input type="checkbox" name="adminRoom" value="305いそなみ">305</label><label><input type="checkbox" name="adminRoom" value="306くろしお">306</label>
+            </div>
+          </div>
+          <div class="col-12"><button type="submit" class="btn btn-primary btn-sm" id="blockSubmitBtn"><i class="bi bi-calendar-plus"></i>予定を押さえる</button></div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="tab-mail" style="display:none">
+    <div class="block-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-envelope-at"></i>メールアドレス管理</h6>
+      <div class="tbl-wrap"><table class="table table-bordered table-sm mb-0 adm-tbl" id="mailTbl"><thead><tr><th>氏名</th><th>メールアドレス</th><th>役割</th><th>操作</th></tr></thead><tbody id="mailBody"></tbody></table></div>
+      <div class="mt-2 d-flex gap-2"><button class="btn btn-sm btn-outline-primary" onclick="addMailRow()">行追加</button><button class="btn btn-sm btn-success" id="mailSaveBtn" onclick="saveMailMaster()">保存</button><span id="mailMsg" class="small align-self-center"></span></div>
+    </div>
+  </div>
+  <div id="tab-apply" style="display:none">
+    <div class="card mt-3">
+      <div class="card-header fw-bold">申請ページ確認</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          申請ページは下のボタンから別タブで開いて確認してください。
+        </p>
+        <a class="btn btn-outline-primary btn-sm"
+           href="https://script.google.com/macros/s/AKfycbxmSNleXxgRe8UDVaBSa99UQNIlcpkpweEvvCrf_Xd0wMx3MwaN4g2MBCASue_RaY6YVQ/exec?page=form"
+           target="_blank"
+           rel="noopener">
+          申請ページを別タブで開く
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-primary text-white py-2"><h6 class="modal-title mb-0" id="modalTitle">申請詳細</h6><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer py-2"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">閉じる</button></div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+var STATUS_PENDING = '未承認';
+var STATUS_APPROVED = '承認';
+var STATUS_REJECTED = '却下';
+
+var PASS='',ALL_DATA=[],calYear=new Date().getFullYear(),calMonth=new Date().getMonth()+1,DAYS_JA=['日','月','火','水','木','金','土'];
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function num(v){var n=Number(v||0);return isNaN(n)?0:n}
+function pad2(n){return String(n).padStart(2,'0')}
+function hasAllergyText(text) { return String(text || '').includes('アレルギーあり'); }
+
+function getAllergyBadgeForMeal(mealRow) {
+  var breakdown = String((mealRow && mealRow.breakdown) || '');
+  if (!breakdown) return '';
+
+  // breakdown から代表者名を抽出（例: "山田 太郎×2、鈴木 花子*×1" → ["山田 太郎", "鈴木 花子"]）
+  var repNames = breakdown.split('、').map(function(part) {
+    return part.replace(/\*?×\d+$/, '').trim();
+  }).filter(function(name) {
+    return name !== '';
+  });
+
+  var dateKey = String((mealRow && mealRow.dateKey) || '');
+  var mealKbn = String((mealRow && mealRow.meal) || '');
+
+  var allergyNames = [];
+  repNames.forEach(function(repName) {
+    ALL_DATA.forEach(function(r) {
+      if (!r || r.name !== repName) return;
+      // 食事日が予約期間に含まれる予約だけを対象にする
+      // 夕食: checkin <= dateKey < checkout
+      // 朝食: checkin < dateKey <= checkout
+      var ci = String(r.checkin || '');
+      var co = String(r.checkout || '');
+      if (!ci || !co || !dateKey) return;
+      if (mealKbn === '夕食') {
+        if (!(ci <= dateKey && dateKey < co)) return;
+      } else {
+        if (!(ci < dateKey && dateKey <= co)) return;
+      }
+      // roster / rooms / memo を行単位で検索し「アレルギーあり」を含む行から氏名を抽出
+      var text = String(r.roster || '') + '\n' + String(r.rooms || '') + '\n' + String(r.memo || '');
+      text.split('\n').forEach(function(line) {
+        if (line.indexOf('アレルギーあり') === -1) return;
+        // 例: "2. B(5歳・小人未満・男・家族・アレルギーあり 要確認)" → "B"
+        var idx = line.indexOf('(');
+        var namePart = idx !== -1 ? line.substring(0, idx) : line;
+        namePart = namePart.replace(/^\s*\d+\.\s*/, '').trim();
+        if (namePart && allergyNames.indexOf(namePart) === -1) allergyNames.push(namePart);
+      });
+    });
+  });
+
+  if (allergyNames.length === 0) return '';
+
+  var html = '<div class="meal-allergy-alert">';
+  html += '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> アレルギーあり</span>';
+  html += '<div class="meal-allergy-target">対象: ' + esc(allergyNames.join(' / ')) + '</div>';
+  html += '</div>';
+  return html;
+}
+
+function login(){
+  PASS=document.getElementById('passInput').value;if(!PASS)return;
+  var btn=document.getElementById('loginBtn');btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm"></span>認証中…';
+  google.script.run.withSuccessHandler(function(data){
+    if(!data||!data.reservations){document.getElementById('loginErr').textContent='認証に失敗しました';document.getElementById('loginErr').style.display='block';btn.disabled=false;btn.innerHTML='<i class="bi bi-box-arrow-in-right"></i>ログイン';return}
+    document.getElementById('loginView').remove();document.getElementById('adminView').style.display='block';ALL_DATA=data.reservations;buildYearSel();renderStay();renderCal();
+  }).withFailureHandler(function(err){document.getElementById('loginErr').textContent=err.message;document.getElementById('loginErr').style.display='block';btn.disabled=false;btn.innerHTML='<i class="bi bi-box-arrow-in-right"></i>ログイン'}).getReservations(PASS);
+}
+function loadAll(){google.script.run.withSuccessHandler(function(data){ALL_DATA=data.reservations;renderStay();renderMeal();renderCal()}).getReservations(PASS)}
+function switchTab(name,btn){['stay','meal','cal','block','mail','apply'].forEach(function(t){document.getElementById('tab-'+t).style.display=t===name?'':'none'});document.querySelectorAll('#mainTabs .nav-link').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');if(name==='meal')renderMeal();if(name==='cal')renderCal();if(name==='mail')loadMailMaster()}
+
+function nendo(dateStr){if(!dateStr)return 0;var d=new Date(dateStr);if(isNaN(d.getTime()))return 0;var y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();return(m>3||(m===3&&day>=21))?y:y-1}
+function buildYearSel(){var years={};ALL_DATA.forEach(function(r){var y=nendo(r.checkin);if(y)years[y]=true});var cur=nendo(new Date().toISOString().slice(0,10));years[cur]=true;document.getElementById('yearSel').innerHTML=Object.keys(years).sort().reverse().map(function(y){return'<option value="'+y+'"'+(Number(y)===cur?' selected':'')+'>'+y+'</option>'}).join('')}
+
+function stayFiltered(){var year=parseInt(document.getElementById('yearSel').value);var q=document.getElementById('stSearch').value.toLowerCase();return ALL_DATA.filter(function(r){if(nendo(r.checkin)!==year)return false;if(q&&!((r.name+r.dept+String(r.no||'')).toLowerCase().includes(q)))return false;return true})}
+function statusInfo(r){
+  if(r.tantou===STATUS_REJECTED||r.ito===STATUS_REJECTED) return{status:STATUS_REJECTED,badge:'<span class="status-badge status-rejected">却下</span>'};
+  if(r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED) return{status:'承認済',badge:'<span class="status-badge status-approved">承認済</span>'};
+  return{status:STATUS_PENDING,badge:'<span class="status-badge status-pending">未承認</span>'};
+}
+function calcNights(r){var ci=new Date(r.checkin),co=new Date(r.checkout);if(!isNaN(ci)&&!isNaN(co)&&co>ci)return Math.round((co-ci)/86400000);return num(r.nights)}
+function calcStayFeeDisplay(r,nights){return num(r.stayFee)||((num(r.adults)*1000+num(r.children)*500)*num(nights))}
+function stripRoomNames(s){return String(s||'').split('\n').filter(function(l){return l.trim()&&!/^\s/.test(l);}).map(function(l){return l.replace(/:\s*$/,'').trim();}).join('\n');}
+
+function hasRoomDetailInRooms(rooms){
+  // "1. 氏名(属性)" 形式の行があれば詳細入りと判定
+  return /\d+\.\s*.+\(.+\)/.test(String(rooms||''));
+}
+function hasRoomAllergyForAdmin(r){
+  var text=String(((r&&r.rooms)||'')+'\n'+((r&&r.roster)||''));
+  return text.indexOf('アレルギーあり')!==-1;
+}
+function renderRoomDetailLineForAdmin(line){
+  if(!String(line||'').trim())return'';
+  var raw=String(line).replace(/・アレルギーなし/g,'');
+  var safe=esc(raw);
+  var isAllergy=raw.indexOf('アレルギーあり')!==-1;
+  safe=safe.replace(/アレルギーあり/g,'アレルギーあり <span class="room-allergy-badge">要確認</span>');
+  if(isAllergy)return'<span class="room-allergy-line">'+safe+'</span>';
+  return safe;
+}
+function formatRoomDetailsForAdmin(r){
+  var rooms=String((r&&r.rooms)||'').trim();
+  var roster=String((r&&r.roster)||'').trim();
+  if(!rooms&&!roster)return'<pre class="room-detail-wrap text-muted">未割当</pre>';
+  var text='';
+  if(rooms&&hasRoomDetailInRooms(rooms)){
+    text=rooms;
+  }else if(rooms&&roster){
+    text=rooms+'\n\n【宿泊者名簿】\n'+roster;
+  }else if(rooms){
+    text=rooms;
+  }else{
+    text='【宿泊者名簿】\n'+roster;
+  }
+  var html=text.split('\n').map(function(line){return renderRoomDetailLineForAdmin(line);}).join('\n');
+  return'<pre class="room-detail-wrap">'+html+'</pre>';
+}
+
+function renderStay(){
+  var rows=stayFiltered();
+  var ppl=rows.reduce(function(s,r){return s+num(r.adults)+num(r.children)+num(r.infants)},0);
+  var fee=rows.reduce(function(s,r){return s+calcStayFeeDisplay(r,calcNights(r))},0);
+  document.getElementById('stCnt').textContent=rows.length;document.getElementById('stPpl').textContent=ppl;document.getElementById('stFee').textContent=fee.toLocaleString();
+  rows.sort(function(a,b){return String(a.checkin||'').localeCompare(String(b.checkin||''))});
+  document.getElementById('stayBody').innerHTML=rows.map(function(r){
+    var nights=calcNights(r),stayFee=calcStayFeeDisplay(r,nights),st=statusInfo(r);
+
+    var hasAllergy = hasAllergyText(r.roster);
+    var trClass = hasAllergy ? ' class="table-danger"' : '';
+    var memoHtml = esc(r.memo || '');
+    if (hasAllergy) memoHtml += '<br><span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> アレルギー有</span>';
+
+    return '<tr' + trClass + '><td>'+esc(r.no||'')+'</td><td>'+esc(r.timestamp||'')+'</td><td class="stay-date-cell">'+esc(r.checkin||'')+'<br>〜<br>'+esc(r.checkout||'')+'</td><td>'+esc(r.name)+'</td><td>'+num(r.adults)+'</td><td>'+num(r.children)+'</td><td>'+num(r.infants)+'</td><td>'+(num(r.adults)+num(r.children)+num(r.infants))+'</td><td>'+nights+'</td><td>¥'+stayFee.toLocaleString()+'</td><td class="room-detail-cell'+(hasRoomAllergyForAdmin(r)?' has-allergy':'')+'">'+formatRoomDetailsForAdmin(r)+'</td><td>'+st.badge+'</td><td>'+apvSel('tantou',r.rowIndex,r.tantou,r.no)+'</td><td>'+apvSel('ito',r.rowIndex,r.ito,r.no)+'</td><td>'+memoHtml+'</td><td><button class="btn btn-xs btn-outline-primary py-0 px-1" onclick="openFormView('+r.no+')"><i class="bi bi-eye"></i> 申請内容</button></td></tr>';
+  }).join('')||'<tr><td colspan="16" class="text-center text-muted py-3">該当なし</td></tr>';
+}
+
+function apvSel(approver,rowIndex,current,no){
+  return '<select class="apv s-'+(current||STATUS_PENDING)+'" onchange="updateApv(\''+approver+'\','+rowIndex+','+no+',this)">'+[STATUS_PENDING,STATUS_APPROVED,STATUS_REJECTED].map(function(s){
+    return'<option'+(s===current?' selected':'')+'>'+s+'</option>'
+  }).join('')+'</select>';
+}
+function updateApv(approver,rowIndex,no,sel){
+  var status=sel.value;
+  sel.disabled=true;
+  google.script.run.withSuccessHandler(function(){
+    var targetIndex = parseInt(rowIndex, 10);
+    var r=ALL_DATA.find(function(x){return parseInt(x.rowIndex, 10)===targetIndex});
+    if(r){if(approver==='tantou')r.tantou=status;else r.ito=status}
+    sel.className='apv s-'+status;sel.disabled=false;renderStay();renderCal()
+  }).withFailureHandler(function(e){alert('更新失敗: '+e.message);sel.disabled=false;loadAll()}).updateApproval(rowIndex,no,approver,status,PASS)
+}
+
+var FORM_BASE_URL = 'https://script.google.com/macros/s/AKfycbxmSNleXxgRe8UDVaBSa99UQNIlcpkpweEvvCrf_Xd0wMx3MwaN4g2MBCASue_RaY6YVQ/exec';
+function openFormView(no) {
+  window.open(FORM_BASE_URL + '?page=form&no=' + no, '_blank');
+}
+function showDetail(rowIndex){
+  var targetIndex = parseInt(rowIndex, 10);
+  var r=ALL_DATA.find(function(x){return parseInt(x.rowIndex, 10)===targetIndex});
+  if(!r)return;
+  var nights=calcNights(r),stayFee=calcStayFeeDisplay(r,nights),total=stayFee+num(r.mealFee);
+
+  var hasAllergy = hasAllergyText(r.roster);
+  var allergyAlert = hasAllergy ? '<div class="alert alert-danger py-2 mb-3 fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> 【重要】食物アレルギーの記載があります。宿泊者名簿を確認してください。</div>' : '';
+
+  document.getElementById('modalTitle').textContent='No.'+(r.no||'')+' '+r.name+' 様';
+  document.getElementById('modalBody').innerHTML=allergyAlert + '<div class="row g-3"><div class="col-md-6"><h6>申込者情報</h6><p>氏名: '+esc(r.name)+'<br>所属: '+esc(r.dept||'—')+'<br>電話: '+esc(r.phone||'—')+'<br>メール: '+esc(r.email)+'</p></div><div class="col-md-6"><h6>料金</h6><p>泊数: '+nights+'泊<br>大人/小人/小人未満: '+r.adults+'/'+r.children+'/'+r.infants+'<br>宿泊料: ¥'+stayFee.toLocaleString()+'<br>食事代: ¥'+num(r.mealFee).toLocaleString()+'<br><strong>合計: ¥'+total.toLocaleString()+'</strong></p></div><div class="col-12"><h6>部屋・宿泊者</h6><pre>'+esc(r.rooms||'(なし)')+'</pre></div><div class="col-12"><h6>食事詳細</h6><pre>'+esc(r.meals||'(なし)')+'</pre></div><div class="col-12"><h6>備考</h6><pre>'+esc(r.memo||'(なし)')+'</pre></div></div>';
+  new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+function setMealRange(days){var now=new Date();if(days===0){document.getElementById('mealFrom').value='';document.getElementById('mealTo').value=''}else{document.getElementById('mealFrom').value=now.toISOString().slice(0,10);var end=new Date(now);end.setDate(end.getDate()+days);document.getElementById('mealTo').value=end.toISOString().slice(0,10)}renderMeal()}
+function renderMeal(){
+  google.script.run.withSuccessHandler(function(data){if(!data||!data.meals){document.getElementById('mealBody').innerHTML='<tr><td colspan="5" class="text-center text-muted py-3">該当なし</td></tr>';return}var from=document.getElementById('mealFrom').value,to=document.getElementById('mealTo').value;var filtered=data.meals.filter(function(r){return(!from||r.dateKey>=from)&&(!to||r.dateKey<=to)});document.getElementById('mealBody').innerHTML=filtered.map(function(r,i){var prev=filtered[i-1];var isNewDate=!prev||prev.dateKey!==r.dateKey;var mealClass=r.meal==='朝食'?'meal-breakfast':'meal-dinner';var dateClass=isNewDate?' meal-new-date':'';return'<tr class="'+mealClass+dateClass+'"><td>'+esc(r.date)+'</td><td>'+esc(r.meal)+'</td><td>'+esc(r.menu)+'</td><td>'+r.qty+'</td><td>'+esc(r.breakdown||'')+getAllergyBadgeForMeal(r)+'</td></tr>'}).join('')||'<tr><td colspan="5" class="text-center text-muted py-3">該当なし</td></tr>'}).withFailureHandler(function(e){document.getElementById('mealBody').innerHTML='<tr><td colspan="5" class="text-danger">エラー: '+e.message+'</td></tr>'}).getMealSummary(PASS)}
+
+function calShift(delta){calMonth+=delta;if(calMonth>12){calMonth=1;calYear++}if(calMonth<1){calMonth=12;calYear--}renderCal()}
+function renderCal(){
+  document.getElementById('calTitle').textContent=calYear+'年'+calMonth+'月';
+  var daysInMonth=new Date(calYear,calMonth,0).getDate(),firstDow=new Date(calYear,calMonth-1,1).getDay(),html='';
+  for(var i=0;i<firstDow;i++)html+='<div class="cal-cell other-month"></div>';
+  for(var day=1;day<=daysInMonth;day++){var dateStr=calYear+'-'+pad2(calMonth)+'-'+pad2(day);var dow=new Date(calYear,calMonth-1,day).getDay();var active=ALL_DATA.filter(function(r){return r.checkin<=dateStr&&r.checkout>dateStr});var dayHtml='<div class="cal-day '+(dow===0?'sun':dow===6?'sat':'')+'">'+day+'</div>';active.forEach(function(r){var cls=r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'cal-approved':r.tantou===STATUS_REJECTED||r.ito===STATUS_REJECTED?'cal-rejected':'cal-pending';dayHtml+='<div class="cal-res '+cls+'">'+esc(r.name)+'</div>'});html+='<div class="cal-cell">'+dayHtml+'</div>'}
+  var total=firstDow+daysInMonth;for(var j=total;j<Math.ceil(total/7)*7;j++)html+='<div class="cal-cell other-month"></div>';
+  document.getElementById('calGrid').innerHTML=html;
+  renderGantt();
+}
+
+var GANTT_ROOMS=[{num:'202',name:'かいどう'},{num:'203',name:'はまぎく'},{num:'205',name:'ききょう'},{num:'206',name:'なでしこ'},{num:'207',name:'あしび'},{num:'301',name:'しらなみ'},{num:'302',name:'なぎさ'},{num:'303',name:'はまかぜ'},{num:'305',name:'いそなみ'},{num:'306',name:'くろしお'}];
+function extractRoomNums(rooms){
+  var nums=[];
+  stripRoomNames(rooms).split('\n').forEach(function(line){
+    var m=line.match(/^(\d{3})/);
+    if(m&&nums.indexOf(m[1])===-1)nums.push(m[1]);
+  });
+  return nums;
+}
+function renderGantt(){
+  var daysInMonth=new Date(calYear,calMonth,0).getDate();
+  var dates=[];
+  for(var d=1;d<=daysInMonth;d++)dates.push(calYear+'-'+pad2(calMonth)+'-'+pad2(d));
+  var html='<table class="gantt-tbl"><thead><tr><th class="gantt-room-head">部屋</th>';
+  dates.forEach(function(ds){
+    var day=parseInt(ds.slice(8),10);
+    var dow=new Date(ds).getDay();
+    var style=dow===0?' style="color:#ffe08a"':dow===6?' style="color:#b3d9ff"':'';
+    html+='<th'+style+'>'+day+'<br>('+DAYS_JA[dow]+')</th>';
+  });
+  html+='</tr></thead><tbody>';
+  GANTT_ROOMS.forEach(function(room){
+    html+='<tr><td class="gantt-room-label">'+room.num+'<br><span style="font-weight:400;font-size:10px">'+room.name+'</span></td>';
+    dates.forEach(function(ds){
+      var hits=ALL_DATA.filter(function(r){
+        return r.checkin<=ds&&r.checkout>ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1;
+      });
+      var checkoutHits=ALL_DATA.filter(function(r){
+        return r.checkout===ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1;
+      });
+      if(!hits.length&&!checkoutHits.length){html+='<td class="gantt-empty">－</td>';return;}
+      html+='<td class="gantt-cell">';
+      hits.forEach(function(r){
+        var isBlock=String(r.name||'').indexOf('管理者押さえ')!==-1;
+        var cls=isBlock?'gantt-booked-block':r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'gantt-booked-approved':r.tantou===STATUS_REJECTED||r.ito===STATUS_REJECTED?'gantt-booked-rejected':'gantt-booked-pending';
+        html+='<div class="gantt-entry '+cls+'"><span class="gantt-name">'+esc(r.name)+'</span>';
+        if(r.no)html+='<span class="gantt-no">No.'+esc(String(r.no))+'</span>';
+        html+='</div>';
+      });
+      checkoutHits.forEach(function(r){
+        var coTime=String(r.checkoutTime||'').trim();
+        var label=coTime?'CO '+esc(coTime):'CO後空き';
+        html+='<div class="gantt-checkout">'+label+'</div>';
+      });
+      html+='</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('ganttGrid').innerHTML=html;
+}
+
+function submitAdminBlock(event){
+  event.preventDefault();
+  var checkedRooms=Array.from(document.querySelectorAll('input[name="adminRoom"]:checked')).map(function(cb){return cb.value});
+  if(!checkedRooms.length){alert('部屋を選択してください');return}
+  var data={type:document.getElementById('blockType').value,checkin:document.getElementById('blockCheckin').value,checkout:document.getElementById('blockCheckout').value,rooms:checkedRooms.join('\n'),memo:document.getElementById('blockMemo').value};
+  if(new Date(data.checkin)>=new Date(data.checkout)){alert('チェックアウトはチェックイン翌日以降を指定');return}
+  var btn=document.getElementById('blockSubmitBtn');btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm"></span>登録中…';
+  google.script.run.withSuccessHandler(function(res){alert('予定を押さえました');document.getElementById('adminBlockForm').reset();btn.disabled=false;btn.innerHTML='<i class="bi bi-calendar-plus"></i>予定を押さえる';loadAll()}).withFailureHandler(function(e){alert('エラー: '+e.message);btn.disabled=false;btn.innerHTML='<i class="bi bi-calendar-plus"></i>予定を押さえる'}).addAdminBlockToSheet(data,PASS);
+}
+
+function loadMailMaster(){google.script.run.withSuccessHandler(function(res){var rows=(res&&res.rows)||[];renderMailTable(rows)}).getMailMaster(PASS)}
+function renderMailTable(rows){var body=document.getElementById('mailBody');body.innerHTML='';if(rows.length===0){addMailRow();return}rows.forEach(function(r){appendMailRow(r.name,r.email,r.role)})}
+function appendMailRow(name,email,role){var roles=['担当','承認者','白浜管理者','システム管理'];var opts=roles.map(function(r){return'<option'+(r===role?' selected':'')+'>'+r+'</option>'}).join('');document.getElementById('mailBody').insertAdjacentHTML('beforeend','<tr><td><input type="text" class="form-control form-control-sm mail-name" value="'+esc(name||'')+'"></td><td><input type="email" class="form-control form-control-sm mail-email" value="'+esc(email||'')+'"></td><td><select class="form-select form-select-sm mail-role">'+opts+'</select></td><td><button class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()"><i class="bi bi-trash"></i></button></td></tr>')}
+function addMailRow(){appendMailRow('','','担当')}
+function saveMailMaster(){
+  var rows=[];document.querySelectorAll('#mailBody tr').forEach(function(tr){var name=tr.querySelector('.mail-name').value.trim(),email=tr.querySelector('.mail-email').value.trim(),role=tr.querySelector('.mail-role').value;if(name||email)rows.push({name:name,email:email,role:role})});
+  var btn=document.getElementById('mailSaveBtn');btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm"></span>保存中…';
+  google.script.run.withSuccessHandler(function(res){btn.disabled=false;btn.innerHTML='<i class="bi bi-save"></i>保存';document.getElementById('mailMsg').textContent='保存しました('+res.saved+'件)';setTimeout(function(){document.getElementById('mailMsg').textContent=''},3000)}).withFailureHandler(function(err){btn.disabled=false;btn.innerHTML='<i class="bi bi-save"></i>保存';document.getElementById('mailMsg').textContent='エラー: '+err.message}).saveMailMaster(rows,PASS);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+﻿# HANDOFF_GPT
+
+Script ID: 1PdxQlNBQZJjlH5wbCN8mWYlLvXf7KD_qLQ-_KKTSNtloLjj5idqXHq18
+復元日: 2026-05-17
