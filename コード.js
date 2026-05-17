@@ -4,12 +4,12 @@ var STATUS_APPROVED = '承認';
 var STATUS_REJECTED = '却下';
 
 var CONFIG = {
-  TANTOU_EMAIL:   "nipposoumu26@gmail.com,f_kokubo@nippoltd.co.jp",
+  TANTOU_EMAIL:   "nipposoumu26@gmail.com",
   TANTOU_NAME:    "小久保",
   ITO_EMAIL:      "k_itou@nippoltd.co.jp",
   SS_URL:         "https://docs.google.com/spreadsheets/d/1cIaZjRsphLC12GRkke1GKRsIfozkiIiyj84oIjnMfzc/edit",
   CALENDAR_ID:    "",
-  ADMIN_PASSWORD: "shirahama2026",
+  ADMIN_PASSWORD: "2026",
   NO_OFFSET:      3319
 };
 
