@@ -173,7 +173,7 @@
           申請ページは下のボタンから別タブで開いて確認してください。
         </p>
         <a class="btn btn-outline-primary btn-sm"
-           href="https://script.google.com/macros/s/AKfycbxmSNleXxgRe8UDVaBSa99UQNIlcpkpweEvvCrf_Xd0wMx3MwaN4g2MBCASue_RaY6YVQ/exec?page=form"
+           href="<?= formBaseUrl ?>?page=form"
            target="_blank"
            rel="noopener">
           申請ページを別タブで開く
@@ -347,7 +347,7 @@ function updateApv(approver,rowIndex,no,sel){
   }).withFailureHandler(function(e){alert('更新失敗: '+e.message);sel.disabled=false;loadAll()}).updateApproval(rowIndex,no,approver,status,PASS)
 }
 
-var FORM_BASE_URL = 'https://script.google.com/macros/s/AKfycbxmSNleXxgRe8UDVaBSa99UQNIlcpkpweEvvCrf_Xd0wMx3MwaN4g2MBCASue_RaY6YVQ/exec';
+var FORM_BASE_URL = '<?= formBaseUrl ?>';
 function openFormView(no) {
   window.open(FORM_BASE_URL + '?page=form&no=' + no, '_blank');
 }

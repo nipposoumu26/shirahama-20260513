@@ -48,7 +48,9 @@ function doGet(e) {
   var page = e && e.parameter && e.parameter.page;
 
   if (page === 'admin') {
-    return HtmlService.createHtmlOutputFromFile('admin')
+    var template = HtmlService.createTemplateFromFile('admin');
+    template.formBaseUrl = ScriptApp.getService().getUrl();
+    return template.evaluate()
       .setTitle('白浜荘 予約管理')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
