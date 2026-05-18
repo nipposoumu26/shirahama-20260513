@@ -1,4 +1,4 @@
-# PROJECT_STATE
+﻿# PROJECT_STATE
 
 状態: 稼働中
 日付: 2026-05-18

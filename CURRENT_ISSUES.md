@@ -1,4 +1,4 @@
-# CURRENT_ISSUES
+﻿# CURRENT_ISSUES
 
 ## 対応済み
 - [x] 部屋別チャートの CO 表示短縮（2026-05-17 deploy @48）
