@@ -36,6 +36,10 @@
     .cal-approved{background:#d1e7dd;color:#0f5132}
     .cal-pending{background:#fff3cd;color:#856404}
     .cal-rejected{background:#dee2e6;color:#6c757d}
+    .cal-co{background:#d4edda;color:#155724}
+    .cal-ci{background:#cce5ff;color:#004085}
+    .cal-turnover{background:#cce5ff;color:#004085;font-weight:700}
+    .cal-turnover-warn{background:#fff3cd;color:#856404;font-weight:700}
     @media print{.no-print,nav,.nav-tabs,select{display:none!important}body{background:#fff}}
     /* ヘッダー固定 */
     #stickyHeader{position:sticky;top:0;z-index:100;background:#f4f7f6;padding-bottom:2px}
@@ -74,6 +78,9 @@
     .gantt-booked-block{background:#e2d9f3;color:#432874}
     .gantt-empty{text-align:center;color:#dee2e6;font-size:10px;padding:6px 0 !important;vertical-align:middle !important}
     .gantt-checkout{font-size:10px;color:#0d6efd;background:#e7f1ff;border:1px dashed #0d6efd;border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.25}
+    .gantt-checkin{font-size:10px;color:#155724;background:#d4edda;border:1px dashed #155724;border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.25}
+    .gantt-turnover{font-size:10px;color:#004085;background:#cce5ff;border:1px solid #004085;border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.25;font-weight:700}
+    .gantt-turnover-warn{font-size:10px;color:#856404;background:#fff3cd;border:1px solid #856404;border-radius:3px;padding:2px 4px;margin-bottom:2px;line-height:1.25;font-weight:700}
   </style>
 </head>
 <body>
@@ -374,7 +381,33 @@ function renderCal(){
   document.getElementById('calTitle').textContent=calYear+'年'+calMonth+'月';
   var daysInMonth=new Date(calYear,calMonth,0).getDate(),firstDow=new Date(calYear,calMonth-1,1).getDay(),html='';
   for(var i=0;i<firstDow;i++)html+='<div class="cal-cell other-month"></div>';
-  for(var day=1;day<=daysInMonth;day++){var dateStr=calYear+'-'+pad2(calMonth)+'-'+pad2(day);var dow=new Date(calYear,calMonth-1,day).getDay();var active=ALL_DATA.filter(function(r){return r.checkin<=dateStr&&r.checkout>dateStr});var dayHtml='<div class="cal-day '+(dow===0?'sun':dow===6?'sat':'')+'">'+day+'</div>';active.forEach(function(r){var cls=r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'cal-approved':r.tantou===STATUS_REJECTED||r.ito===STATUS_REJECTED?'cal-rejected':'cal-pending';dayHtml+='<div class="cal-res '+cls+'">'+esc(r.name)+'</div>'});html+='<div class="cal-cell">'+dayHtml+'</div>'}
+  for(var day=1;day<=daysInMonth;day++){
+    var dateStr=calYear+'-'+pad2(calMonth)+'-'+pad2(day);
+    var dow=new Date(calYear,calMonth-1,day).getDay();
+    // 滞在中（checkin日を含む、checkout日は含まない）
+    var staying=ALL_DATA.filter(function(r){return r.checkin<=dateStr&&r.checkout>dateStr&&r.tantou!==STATUS_REJECTED&&r.ito!==STATUS_REJECTED});
+    // チェックアウト日
+    var coList=ALL_DATA.filter(function(r){return r.checkout===dateStr&&r.tantou!==STATUS_REJECTED&&r.ito!==STATUS_REJECTED});
+    var dayHtml='<div class="cal-day '+(dow===0?'sun':dow===6?'sat':'')+'">'+day+'</div>';
+    // CO表示
+    coList.forEach(function(r){
+      var coTime=(r.checkoutTime||'').trim();
+      dayHtml+='<div class="cal-res cal-co">CO'+(coTime?' '+esc(coTime):'')+' '+esc(r.name)+'</div>';
+    });
+    // 滞在中（CI日はCI表示、それ以外は通常表示）
+    staying.forEach(function(r){
+      if(r.checkin===dateStr){
+        var ciTime=(r.checkinTime||'').replace(/～.*$/,'').trim();
+        dayHtml+='<div class="cal-res cal-ci">CI'+(ciTime?' '+esc(ciTime):'')+' '+esc(r.name)+'</div>';
+      }else{
+        var isApproved=r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED;
+        var cls=isApproved?'cal-approved':'cal-pending';
+        var mark=isApproved?'':'△ ';
+        dayHtml+='<div class="cal-res '+cls+'">'+mark+esc(r.name)+'</div>';
+      }
+    });
+    html+='<div class="cal-cell">'+dayHtml+'</div>';
+  }
   var total=firstDow+daysInMonth;for(var j=total;j<Math.ceil(total/7)*7;j++)html+='<div class="cal-cell other-month"></div>';
   document.getElementById('calGrid').innerHTML=html;
   renderGantt();
@@ -389,7 +422,13 @@ function extractRoomNums(rooms){
   });
   return nums;
 }
+function ganttParseMin_(t,def){
+  if(!t)return{m:def,d:true};
+  var mt=String(t).match(/(\d{1,2}):(\d{2})/);
+  return mt?{m:parseInt(mt[1],10)*60+parseInt(mt[2],10),d:false}:{m:def,d:true};
+}
 function renderGantt(){
+  var CLEAN_BUF=120,WARN_BUF=180;
   var daysInMonth=new Date(calYear,calMonth,0).getDate();
   var dates=[];
   for(var d=1;d<=daysInMonth;d++)dates.push(calYear+'-'+pad2(calMonth)+'-'+pad2(d));
@@ -405,24 +444,57 @@ function renderGantt(){
     html+='<tr><td class="gantt-room-label">'+room.num+'<br><span style="font-weight:400;font-size:10px">'+room.name+'</span></td>';
     dates.forEach(function(ds){
       var hits=ALL_DATA.filter(function(r){
-        return r.checkin<=ds&&r.checkout>ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1;
+        return r.checkin<=ds&&r.checkout>ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1&&r.tantou!==STATUS_REJECTED&&r.ito!==STATUS_REJECTED;
       });
       var checkoutHits=ALL_DATA.filter(function(r){
-        return r.checkout===ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1;
+        return r.checkout===ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1&&r.tantou!==STATUS_REJECTED&&r.ito!==STATUS_REJECTED;
       });
-      if(!hits.length&&!checkoutHits.length){html+='<td class="gantt-empty">－</td>';return;}
+      var checkinHits=ALL_DATA.filter(function(r){
+        return r.checkin===ds&&extractRoomNums(r.rooms||'').indexOf(room.num)!==-1&&r.tantou!==STATUS_REJECTED&&r.ito!==STATUS_REJECTED;
+      });
+      if(!hits.length&&!checkoutHits.length&&!checkinHits.length){html+='<td class="gantt-empty">－</td>';return;}
       html+='<td class="gantt-cell">';
+      // CO+CI 同日 → turnover 表示
+      var coHandled={},ciHandled={};
+      if(checkoutHits.length&&checkinHits.length){
+        checkoutHits.forEach(function(coR,ci2){
+          checkinHits.forEach(function(ciR,ci3){
+            var co=ganttParseMin_(coR.checkoutTime,600);
+            var ci=ganttParseMin_((ciR.checkinTime||'').replace(/～.*$/,''),900);
+            var gap=ci.m-co.m;
+            var cls=gap<CLEAN_BUF?'gantt-checkout':gap<WARN_BUF||co.d||ci.d?'gantt-turnover-warn':'gantt-turnover';
+            var coLabel=co.d?'CO?':('CO'+Math.floor(co.m/60)+':'+pad2(co.m%60));
+            var ciLabel=ci.d?'CI?':('CI'+Math.floor(ci.m/60)+':'+pad2(ci.m%60));
+            var label=gap<CLEAN_BUF?'× 競合 '+coLabel+'→'+ciLabel:'入替 '+coLabel+'→'+ciLabel+' 清掃'+gap+'分';
+            html+='<div class="'+cls+'">'+label+'</div>';
+            coHandled[ci2]=true;ciHandled[ci3]=true;
+          });
+        });
+      }
+      // 滞在中（CI日以外）
       hits.forEach(function(r){
+        if(r.checkin===ds)return; // CI日は別表示
         var isBlock=String(r.name||'').indexOf('管理者押さえ')!==-1;
-        var cls=isBlock?'gantt-booked-block':r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'gantt-booked-approved':r.tantou===STATUS_REJECTED||r.ito===STATUS_REJECTED?'gantt-booked-rejected':'gantt-booked-pending';
+        var cls=isBlock?'gantt-booked-block':r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'gantt-booked-approved':'gantt-booked-pending';
         html+='<div class="gantt-entry '+cls+'"><span class="gantt-name">'+esc(r.name)+'</span>';
         if(r.no)html+='<span class="gantt-no">No.'+esc(String(r.no))+'</span>';
         html+='</div>';
       });
-      checkoutHits.forEach(function(r){
+      // CO単独（turnoverで処理済みのものは除外）
+      checkoutHits.forEach(function(r,idx){
+        if(coHandled[idx])return;
         var coTime=String(r.checkoutTime||'').trim();
-        var label=coTime?'CO '+esc(coTime):'CO後空き';
-        html+='<div class="gantt-checkout">'+label+'</div>';
+        html+='<div class="gantt-checkout">'+(coTime?'CO '+esc(coTime):'CO後空き')+'</div>';
+      });
+      // CI表示（滞在初日）
+      checkinHits.forEach(function(r,idx){
+        if(ciHandled[idx])return;
+        var ciTime=(r.checkinTime||'').replace(/～.*$/,'').trim();
+        var isBlock=String(r.name||'').indexOf('管理者押さえ')!==-1;
+        var cls=isBlock?'gantt-booked-block':r.tantou===STATUS_APPROVED&&r.ito===STATUS_APPROVED?'gantt-booked-approved':'gantt-booked-pending';
+        html+='<div class="gantt-entry '+cls+'"><span class="gantt-name">'+(ciTime?'CI'+esc(ciTime)+' ':'')+esc(r.name)+'</span>';
+        if(r.no)html+='<span class="gantt-no">No.'+esc(String(r.no))+'</span>';
+        html+='</div>';
       });
       html+='</td>';
     });

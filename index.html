@@ -28,6 +28,9 @@
     .cal-sat { background: #ddeeff !important; }
     .cal-occ { background: #ffcccc !important; color: #cc0000; font-weight: bold; }
     .cal-pend { background: #fff3cd !important; color: #b36a00; }
+    .cal-co { background: #d4edda !important; color: #155724; }
+    .cal-turnover { background: #cce5ff !important; color: #004085; }
+    .cal-turnover-warn { background: #fff3cd !important; color: #856404; font-weight: bold; }
 
     .time-block { border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 14px; background: #fafafa; margin-bottom: 8px; }
     .time-block-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #495057; }
@@ -85,6 +88,9 @@
     <div class="mb-3 d-flex flex-wrap gap-3">
       <small><span class="badge" style="background:#ffcccc;color:#cc0000">×</span> 予約済</small>
       <small><span class="badge" style="background:#fff3cd;color:#b36a00">△</span> 申請中</small>
+      <small><span class="badge" style="background:#d4edda;color:#155724">CO</span> チェックアウト日</small>
+      <small><span class="badge" style="background:#cce5ff;color:#004085">入替可</span> 当日入替（利用可）</small>
+      <small><span class="badge" style="background:#fff3cd;color:#856404">要確認</span> 入替・要確認</small>
       <small><span class="badge border" style="background:#e8f5e9">　</span> 空き</small>
     </div>
 
@@ -100,15 +106,15 @@
       <div class="col-md-6">
         <label class="form-label">チェックイン予定時間 <span class="text-danger">*</span></label>
         <div class="time-block"><div class="time-block-options">
-          <label><input type="radio" name="checkinTime" value="8:30～9:30" required> 8:30～9:30</label>
-          <label><input type="radio" name="checkinTime" value="13:00～14:00"> 13:00～14:00</label>
-          <label><input type="radio" name="checkinTime" value="16:30～17:30"> 16:30～17:30</label>
+          <label><input type="radio" name="checkinTime" value="8:30～9:30" required onchange="checkRooms()"> 8:30～9:30</label>
+          <label><input type="radio" name="checkinTime" value="13:00～14:00" onchange="checkRooms()"> 13:00～14:00</label>
+          <label><input type="radio" name="checkinTime" value="16:30～17:30" onchange="checkRooms()"> 16:30～17:30</label>
         </div></div>
       </div>
 
       <div class="col-md-6">
         <label class="form-label">チェックアウト予定時刻 <span class="text-danger">*</span></label>
-        <select id="checkoutTime" class="form-select" required>
+        <select id="checkoutTime" class="form-select" required onchange="checkRooms()">
           <option value="">選択してください</option>
           <option value="7:00">7:00</option><option value="8:00">8:00</option><option value="9:00">9:00</option>
           <option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option>
@@ -197,7 +203,7 @@ var ROOM_CAPACITY = {
 };
 
 var personCount = 0;
-var _occupiedRooms = [], _tentativeRooms = [];
+var _occupiedRooms = [], _tentativeRooms = [], _turnoverRooms = [], _turnoverWarnRooms = [];
 
 // 初期化
 function initCalendar() { var n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth() + 1; loadCalendar(); }
@@ -214,7 +220,21 @@ function renderCalendar(data) {
     h += '<tr class="' + cls + '"><td>' + d.day + '</td>';
     data.rooms.forEach(function(r) {
       var st = d.rooms[r];
-      h += st === 'occupied' ? '<td class="cal-occ">×</td>' : st === 'pending' ? '<td class="cal-pend">△</td>' : '<td></td>';
+      if (typeof st === 'string') {
+        // 旧形式互換
+        h += st === 'occupied' ? '<td class="cal-occ">×</td>' : st === 'pending' ? '<td class="cal-pend">△</td>' : '<td></td>';
+      } else if (st && typeof st === 'object') {
+        var s = st.status;
+        if (s === 'occupied')            h += '<td class="cal-occ">×</td>';
+        else if (s === 'pending')        h += '<td class="cal-pend">△</td>';
+        else if (s === 'co')             h += '<td class="cal-co">CO</td>';
+        else if (s === 'turnover')       h += '<td class="cal-turnover">入替可</td>';
+        else if (s === 'turnover_warn')  h += '<td class="cal-turnover-warn">要確認</td>';
+        else if (s === 'conflict')       h += '<td class="cal-occ">×</td>';
+        else                             h += '<td></td>';
+      } else {
+        h += '<td></td>';
+      }
     });
     h += '</tr>';
   });
@@ -227,7 +247,10 @@ function makeRoomOptions(selectedVal) {
   function opt(val, label, cap) {
     var isOcc = _occupiedRooms.indexOf(val) !== -1;
     var isTent = _tentativeRooms.indexOf(val) !== -1;
-    var dispLabel = val + ' ' + label + '（' + cap + '名）' + (isOcc ? '（予約済）' : isTent ? ' ⚠仮押さえ' : '');
+    var isTurnover = _turnoverRooms.indexOf(val) !== -1;
+    var isTurnoverWarn = _turnoverWarnRooms.indexOf(val) !== -1;
+    var suffix = isOcc ? '（予約済）' : isTent ? ' ⚠仮押さえ' : isTurnoverWarn ? ' ⚠要確認' : isTurnover ? '（CO後利用可）' : '';
+    var dispLabel = val + ' ' + label + '（' + cap + '名）' + suffix;
     return '<option value="' + val + '"' + (selectedVal === val ? ' selected' : '') + (isOcc ? ' disabled' : '') + '>' + dispLabel + '</option>';
   }
   return '<option value="">部屋を選択</option>' +
@@ -354,9 +377,15 @@ function updateSummary() {
 function checkRooms() {
   var ci = document.getElementById('checkin').value, co = document.getElementById('checkout').value;
   if (!ci || !co) return;
+  var ciTimeEl = document.querySelector('input[name="checkinTime"]:checked');
+  var ciTime = ciTimeEl ? ciTimeEl.value : "";
+  var coTimeEl = document.getElementById('checkoutTime');
+  var coTime = coTimeEl ? coTimeEl.value : "";
   google.script.run.withSuccessHandler(function(res) {
     _occupiedRooms = res.occupiedRooms || [];
     _tentativeRooms = res.tentativeRooms || [];
+    _turnoverRooms = res.turnoverRooms || [];
+    _turnoverWarnRooms = res.turnoverWarnRooms || [];
 
     // 全てのセレクトボックスを再描画
     document.querySelectorAll('.p-room').forEach(function(sel) {
@@ -364,7 +393,7 @@ function checkRooms() {
       sel.innerHTML = makeRoomOptions(currentVal);
     });
     updateSummary();
-  }).getOccupiedRooms(ci, co);
+  }).getOccupiedRooms(ci, co, ciTime, coTime);
 }
 
 function stepQty(btn, delta) {

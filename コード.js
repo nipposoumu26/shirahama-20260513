@@ -17,6 +17,46 @@ var PRICES = {
   STAY: { adult: 1000, child: 500, infant: 0 }
 };
 
+// 同日入替判定用定数
+var CLEANING_BUFFER_MINUTES = 120;
+var TURNOVER_WARN_BUFFER_MINUTES = 180;
+var DEFAULT_CHECKOUT_TIME = "10:00";
+var DEFAULT_CHECKIN_TIME = "15:00";
+
+/**
+ * 時刻文字列から最初の HH:mm を拾って分数に変換する。
+ * "13:00～14:00" → 780, "16:30～17:30" → 990 のように先頭の時刻を採用。
+ * @param {string} timeStr - 時刻を含む文字列
+ * @param {string} defaultTime - timeStr から時刻が取れない場合のフォールバック ("HH:mm")
+ * @returns {{ minutes: number, usedDefault: boolean }}
+ */
+function parseTimeToMinutes_(timeStr, defaultTime) {
+  var s = String(timeStr || "").trim();
+  var m = s.match(/(\d{1,2}):(\d{2})/);
+  if (m) return { minutes: parseInt(m[1], 10) * 60 + parseInt(m[2], 10), usedDefault: false };
+  var dm = String(defaultTime || "").match(/(\d{1,2}):(\d{2})/);
+  if (dm) return { minutes: parseInt(dm[1], 10) * 60 + parseInt(dm[2], 10), usedDefault: true };
+  return { minutes: 0, usedDefault: true };
+}
+
+/**
+ * 同日入替の判定を行う。
+ * @param {string} existingCheckoutTime - 既存予約のチェックアウト時刻
+ * @param {string} newCheckinTime - 新規予約のチェックイン時刻
+ * @returns {"conflict"|"turnover_warn"|"turnover"}
+ */
+function getTurnoverStatus_(existingCheckoutTime, newCheckinTime) {
+  var co = parseTimeToMinutes_(existingCheckoutTime, DEFAULT_CHECKOUT_TIME);
+  var ci = parseTimeToMinutes_(newCheckinTime, DEFAULT_CHECKIN_TIME);
+  var gap = ci.minutes - co.minutes;
+  var usedDefault = co.usedDefault || ci.usedDefault;
+  var status;
+  if (gap < CLEANING_BUFFER_MINUTES) status = "conflict";
+  else if (gap < TURNOVER_WARN_BUFFER_MINUTES || usedDefault) status = "turnover_warn";
+  else status = "turnover";
+  return { status: status, gapMinutes: gap, usedDefault: usedDefault };
+}
+
 var DINNER_MASTER = [
   'A(1500)', 'B(2500)', 'C(3500)', '洋食(1800)', '大皿洋食(1800)',
   '特(要相談)', 'お子様用(1000)', '舟盛(要相談)', '鯛茶漬け(800)', 'ハンバーガープレート(800)'
@@ -93,6 +133,7 @@ function getAvailabilityData(year, month) {
   try {
     var ss = SpreadsheetApp.openByUrl(CONFIG.SS_URL);
     var src = ss.getSheetByName("予約申請一覧");
+    var tz  = ss.getSpreadsheetTimeZone() || 'Asia/Tokyo';
     var resData = src.getDataRange().getValues();
     var reservations = [];
     for (var i = 1; i < resData.length; i++) {
@@ -101,11 +142,15 @@ function getAvailabilityData(year, month) {
       if (!ci || !co) continue;
       var ciDate = new Date(ci), coDate = new Date(co);
       if (isNaN(ciDate.getTime()) || isNaN(coDate.getTime())) continue;
+      ciDate.setHours(0,0,0,0); coDate.setHours(0,0,0,0);
       reservations.push({
         checkin: ciDate.getTime(), checkout: coDate.getTime(),
         roomsStr: String(row[COL.ROOMS] || ""),
         roomNums: extractRoomNumbers_(String(row[COL.ROOMS] || "")),
-        isApproved: (row[COL.ITO] === STATUS_APPROVED)
+        isApproved: (row[COL.ITO] === STATUS_APPROVED),
+        name: row[COL.NAME] || "",
+        checkinTime: toTimeString_(row[COL.CHECKIN_TIME], tz),
+        checkoutTime: toTimeString_(row[COL.CHECKOUT_TIME], tz)
       });
     }
     var rooms = ["202","203","205","206","207","301","302","303","305","306"];
@@ -116,14 +161,41 @@ function getAvailabilityData(year, month) {
       var dt = date.getTime();
       var roomStatus = {};
       rooms.forEach(function(r) {
-        var status = 'available';
+        var overnight = null; // 当日宿泊 (checkin <= dt < checkout)
+        var coRes     = null; // 当日チェックアウトのみ (dt == checkout)
         for (var j = 0; j < reservations.length; j++) {
           var res = reservations[j];
-          if (dt >= res.checkin && dt < res.checkout && res.roomNums.indexOf(r) !== -1) {
-            status = res.isApproved ? 'occupied' : 'pending'; break;
+          if (res.roomNums.indexOf(r) === -1) continue;
+          if (dt >= res.checkin && dt < res.checkout) {
+            if (!overnight || (!overnight.isApproved && res.isApproved)) overnight = res;
+          } else if (dt === res.checkout) {
+            if (!coRes || (!coRes.isApproved && res.isApproved)) coRes = res;
           }
         }
-        roomStatus[r] = status;
+        if (overnight && coRes) {
+          // 同日入替: 前の人 CO → この人 CI
+          var ts = getTurnoverStatus_(coRes.checkoutTime, overnight.checkinTime);
+          roomStatus[r] = {
+            status: ts.status, gapMinutes: ts.gapMinutes, usedDefault: ts.usedDefault,
+            coTime: coRes.checkoutTime, coName: coRes.name, coIsApproved: coRes.isApproved,
+            ciTime: overnight.checkinTime, ciName: overnight.name, ciIsApproved: overnight.isApproved
+          };
+        } else if (overnight) {
+          var base = overnight.isApproved ? 'occupied' : 'pending';
+          if (dt === overnight.checkin) {
+            roomStatus[r] = { status: base, name: overnight.name,
+              isApproved: overnight.isApproved,
+              ciTime: overnight.checkinTime, ciName: overnight.name };
+          } else {
+            roomStatus[r] = { status: base, name: overnight.name,
+              isApproved: overnight.isApproved };
+          }
+        } else if (coRes) {
+          roomStatus[r] = { status: 'co', coTime: coRes.checkoutTime, coName: coRes.name,
+            isApproved: coRes.isApproved };
+        } else {
+          roomStatus[r] = { status: 'available' };
+        }
       });
       days.push({ day: day, dow: date.getDay(), rooms: roomStatus });
     }
@@ -158,7 +230,7 @@ function processForm(data) {
   lock.waitLock(10000);
   var bookingNo;
   try {
-    var conflict = checkRoomConflict(roomsStr, data.checkin, data.checkout, sheet);
+    var conflict = checkRoomConflict(roomsStr, data.checkin, data.checkout, sheet, data.checkinTime || "", data.checkoutTime || "");
     if (conflict.length > 0) throw new Error("以下の部屋がすでに予約済みです: " + conflict.join(", "));
     bookingNo = getNextBookingNo_(sheet);
     var row = [];
@@ -210,29 +282,76 @@ function processForm(data) {
   };
 }
 
-function getOccupiedRooms(ci, co) {
+function getOccupiedRooms(ci, co, newCheckinTime, newCheckoutTime) {
   var ss = SpreadsheetApp.openByUrl(CONFIG.SS_URL);
   var sheet = ss.getSheetByName("予約申請一覧");
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Tokyo';
   var data = sheet.getDataRange().getValues();
-  var occupied = [], tentative = [];
-  var tStart = new Date(ci), tEnd = new Date(co);
+  var occupied = [], tentative = [], turnover = [], turnoverWarn = [];
+  var tStart = new Date(ci); tStart.setHours(0,0,0,0);
+  var tEnd   = new Date(co); tEnd.setHours(0,0,0,0);
+  var ALL_ROOMS = ["202","203","205","206","207","301","302","303","305","306"];
   for (var i = 1; i < data.length; i++) {
-    var rci = data[i][COL.CHECKIN], rco = data[i][COL.CHECKOUT];
+    var row = data[i];
+    if (row[COL.TANTOU] === STATUS_REJECTED || row[COL.ITO] === STATUS_REJECTED) continue;
+    var rci = row[COL.CHECKIN], rco = row[COL.CHECKOUT];
     if (!rci || !rco) continue;
-    var rS = new Date(rci), rE = new Date(rco);
+    var rS = new Date(rci); rS.setHours(0,0,0,0);
+    var rE = new Date(rco); rE.setHours(0,0,0,0);
     if (isNaN(rS.getTime()) || isNaN(rE.getTime())) continue;
-    if (tStart < rE && tEnd > rS && data[i][COL.TANTOU] !== STATUS_REJECTED && data[i][COL.ITO] !== STATUS_REJECTED) {
-      var roomsStr = String(data[i][COL.ROOMS] || "");
-      var extractedRooms = extractRoomNumbers_(roomsStr);
-      var resName = String(data[i][COL.NAME] || "");
-      var isTentative = resName.indexOf("管理者押さえ：仮押さえ") === 0;
-      var target = isTentative ? tentative : occupied;
-      ["202","203","205","206","207","301","302","303","305","306"].forEach(function(n) {
-        if (extractedRooms.indexOf(n) !== -1) target.push(n);
-      });
-    }
+
+    var isOverlap  = (tStart < rE && tEnd > rS);
+    var isBoundary = (tStart.getTime() === rE.getTime() || tEnd.getTime() === rS.getTime());
+    if (!isOverlap && !isBoundary) continue;
+
+    var extractedRooms = extractRoomNumbers_(String(row[COL.ROOMS] || ""));
+    var resName = String(row[COL.NAME] || "");
+    var isTentative = resName.indexOf("管理者押さえ：仮押さえ") === 0;
+
+    ALL_ROOMS.forEach(function(n) {
+      if (extractedRooms.indexOf(n) === -1) return;
+
+      if (isOverlap) {
+        var target = isTentative ? tentative : occupied;
+        if (target.indexOf(n) === -1) target.push(n);
+      } else if (tStart.getTime() === rE.getTime()) {
+        var existingCoTime = toTimeString_(row[COL.CHECKOUT_TIME], tz);
+        var ts = getTurnoverStatus_(existingCoTime, newCheckinTime || "");
+        if (ts.status === "conflict") {
+          var tgtC = isTentative ? tentative : occupied;
+          if (tgtC.indexOf(n) === -1) tgtC.push(n);
+        } else if (ts.status === "turnover_warn") {
+          if (turnoverWarn.indexOf(n) === -1) turnoverWarn.push(n);
+        } else {
+          if (turnover.indexOf(n) === -1) turnover.push(n);
+        }
+      } else if (tEnd.getTime() === rS.getTime()) {
+        var existingCiTime = toTimeString_(row[COL.CHECKIN_TIME], tz);
+        var ts2 = getTurnoverStatus_(newCheckoutTime || "", existingCiTime);
+        if (ts2.status === "conflict") {
+          var tgtC2 = isTentative ? tentative : occupied;
+          if (tgtC2.indexOf(n) === -1) tgtC2.push(n);
+        } else if (ts2.status === "turnover_warn") {
+          if (turnoverWarn.indexOf(n) === -1) turnoverWarn.push(n);
+        } else {
+          if (turnover.indexOf(n) === -1) turnover.push(n);
+        }
+      }
+    });
   }
-  return { occupiedRooms: occupied, tentativeRooms: tentative };
+  // 優先度整理: occupied/tentative > turnoverWarn > turnover
+  turnoverWarn = turnoverWarn.filter(function(n) {
+    return occupied.indexOf(n) === -1 && tentative.indexOf(n) === -1;
+  });
+  turnover = turnover.filter(function(n) {
+    return occupied.indexOf(n) === -1 && tentative.indexOf(n) === -1 && turnoverWarn.indexOf(n) === -1;
+  });
+  return {
+    occupiedRooms: occupied,
+    tentativeRooms: tentative,
+    turnoverRooms: turnover,
+    turnoverWarnRooms: turnoverWarn
+  };
 }
 
 function getReservations(password) {
@@ -267,7 +386,9 @@ function getReservations(password) {
       nights: Number(row[COL.NIGHTS]) || 0,
       stayFee: Number(row[COL.STAY_FEE]) || 0,
       mealFee: Number(row[COL.MEAL_FEE]) || 0,
-      total: Number(row[COL.TOTAL]) || 0
+      total: Number(row[COL.TOTAL]) || 0,
+      checkinTime: toTimeString_(row[COL.CHECKIN_TIME], tz),
+      checkoutTime: toTimeString_(row[COL.CHECKOUT_TIME], tz)
     });
   }
   results.reverse();
@@ -428,7 +549,7 @@ function addAdminBlockToSheet(data, password) {
 
     var ss = SpreadsheetApp.openByUrl(CONFIG.SS_URL);
     var sheet = ss.getSheetByName("予約申請一覧");
-    var conflict = checkRoomConflict(data.rooms, data.checkin, data.checkout, sheet);
+    var conflict = checkRoomConflict(data.rooms, data.checkin, data.checkout, sheet, "", "");
     if (conflict.length > 0) throw new Error("既に予約済みの部屋があります: " + conflict.join(", "));
 
     var nextNo = getNextBookingNo_(sheet);
@@ -517,9 +638,10 @@ function extractRoomNumbers_(roomsText) {
   return rooms;
 }
 
-function checkRoomConflict(roomsStr, checkin, checkout, sheet) {
+function checkRoomConflict(roomsStr, checkin, checkout, sheet, newCheckinTime, newCheckoutTime) {
   if (!roomsStr) return [];
   var data = sheet.getDataRange().getValues();
+  var tz = sheet.getParent().getSpreadsheetTimeZone() || 'Asia/Tokyo';
   var tStart = new Date(checkin); tStart.setHours(0,0,0,0);
   var tEnd = new Date(checkout); tEnd.setHours(0,0,0,0);
   var requested = extractRoomNumbers_(roomsStr);
@@ -532,12 +654,39 @@ function checkRoomConflict(roomsStr, checkin, checkout, sheet) {
     if (!rci || !rco) continue;
     var rS = new Date(rci); rS.setHours(0,0,0,0);
     var rE = new Date(rco); rE.setHours(0,0,0,0);
-    if (isNaN(rS) || isNaN(rE)) continue;
-    if (tStart < rE && tEnd > rS) {
-      var existingRooms = extractRoomNumbers_(String(row[COL.ROOMS] || ""));
-      requested.forEach(function(n) {
-        if (existingRooms.indexOf(n) !== -1 && conflicts.indexOf(n) === -1) conflicts.push(n);
+    if (isNaN(rS.getTime()) || isNaN(rE.getTime())) continue;
+
+    var isOverlap = (tStart < rE && tEnd > rS);
+    var isBoundary = (tStart.getTime() === rE.getTime() || tEnd.getTime() === rS.getTime());
+
+    if (!isOverlap && !isBoundary) continue;
+
+    var existingRooms = extractRoomNumbers_(String(row[COL.ROOMS] || ""));
+    var commonRooms = requested.filter(function(n) {
+      return existingRooms.indexOf(n) !== -1;
+    });
+    if (commonRooms.length === 0) continue;
+
+    if (isOverlap) {
+      commonRooms.forEach(function(n) {
+        if (conflicts.indexOf(n) === -1) conflicts.push(n);
       });
+    } else if (tStart.getTime() === rE.getTime()) {
+      var existingCoTime = toTimeString_(row[COL.CHECKOUT_TIME], tz);
+      var ts = getTurnoverStatus_(existingCoTime, newCheckinTime || "");
+      if (ts.status === "conflict") {
+        commonRooms.forEach(function(n) {
+          if (conflicts.indexOf(n) === -1) conflicts.push(n);
+        });
+      }
+    } else if (tEnd.getTime() === rS.getTime()) {
+      var existingCiTime = toTimeString_(row[COL.CHECKIN_TIME], tz);
+      var ts2 = getTurnoverStatus_(newCheckoutTime || "", existingCiTime);
+      if (ts2.status === "conflict") {
+        commonRooms.forEach(function(n) {
+          if (conflicts.indexOf(n) === -1) conflicts.push(n);
+        });
+      }
     }
   }
   return conflicts;
@@ -673,99 +822,3 @@ function sendNotification(data, fees) {
     MailApp.sendEmail({ to: data.email, subject: "【受付控え】" + subject, body: "下記の内容で予約申請を受け付けました。\n\n" + body });
   }
 }
-
-// ─── DEBUG: 一時関数 ── 確認後に削除すること ────────────────────────────────
-function debugReservationNo(targetNo) {
-  var ss = SpreadsheetApp.openByUrl(CONFIG.SS_URL);
-  var sheet = ss.getSheetByName("予約申請一覧");
-  var data = sheet.getDataRange().getValues();
-  var offset = CONFIG.NO_OFFSET; // 3319
-
-  var logs = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var sheetNo   = row[COL.NO];
-    var name      = row[COL.NAME] || "";
-    var calcA     = offset + i;       // CONFIG.NO_OFFSET + i
-    var calcB     = offset + i + 1;   // CONFIG.NO_OFFSET + i + 1
-    var getResNo  = sheetNo || calcA; // getReservations() の no 計算値
-
-    var hit = (
-      String(sheetNo) === String(targetNo) ||
-      calcA === targetNo ||
-      calcB === targetNo ||
-      name.indexOf("ニッポー太郎") !== -1
-    );
-    if (!hit) continue;
-
-    logs.push({
-      i:               i,
-      "i+1":           i + 1,
-      NO_OFFSET:       offset,
-      "OFFSET+i":      calcA,
-      "OFFSET+i+1":    calcB,
-      "row[COL.NO]":   sheetNo,
-      "row[COL.NAME]": name,
-      checkin:         row[COL.CHECKIN]  ? new Date(row[COL.CHECKIN]).toISOString().slice(0,10)  : "",
-      checkout:        row[COL.CHECKOUT] ? new Date(row[COL.CHECKOUT]).toISOString().slice(0,10) : "",
-      "getReservations_no": getResNo
-    });
-  }
-
-  Logger.log("=== debugReservationNo(" + targetNo + ") ===");
-  if (logs.length === 0) {
-    Logger.log("該当行なし");
-  } else {
-    logs.forEach(function(entry) { Logger.log(JSON.stringify(entry)); });
-  }
-}
-function _debug3336() { debugReservationNo(3336); }
-
-// getReservationByNo を直接呼び出してログに出す
-function _debugGetByNo3336() {
-  var result = getReservationByNo(3336);
-  Logger.log("=== _debugGetByNo3336 ===");
-  Logger.log("result: " + JSON.stringify(result));
-  if (!result) {
-    // 見つからない場合、各行の COL.NO 型と値をログ
-    var ss = SpreadsheetApp.openByUrl(CONFIG.SS_URL);
-    var sheet = ss.getSheetByName("予約申請一覧");
-    var data = sheet.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      if (!row[COL.NAME]) continue;
-      var rawNo = row[COL.NO];
-      Logger.log("i=" + i + " typeof=" + typeof rawNo + " value=" + rawNo + " parsed=" + parseInt(rawNo, 10));
-    }
-  }
-}
-/**
- * 予約No.3336 の取得結果をサーバーサイドで直接確認する
- */
-function _debugGet3336() {
-  var targetNo = 3336;
-  Logger.log("=== _debugGet3336 START (target: " + targetNo + ") ===");
-
-  try {
-    var r = getReservationByNo(targetNo);
-
-    if (r === null) {
-      Logger.log("結果: null (getReservationByNo 内で一致する行が見つかりませんでした)");
-    } else {
-      var json = JSON.stringify(r);
-      Logger.log("結果: データ取得成功");
-      Logger.log("戻り値オブジェクト: " + json);
-
-      for (var key in r) {
-        if (r[key] instanceof Date) {
-          Logger.log("【警告】プロパティ '" + key + "' は Date型 です。通信エラーの原因になります。");
-        }
-      }
-    }
-  } catch (e) {
-    Logger.log("【エラー】実行中に例外が発生しました: " + e.toString());
-  }
-
-  Logger.log("=== _debugGet3336 END ===");
-}
-// ────────────────────────────────────────────────────────────────────────────
